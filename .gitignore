@@ -1,0 +1,9 @@
+.DS_Store
+
+# Local development notes
+findings.md
+progress.md
+task_plan.md
+
+# Historical screenshots kept outside the public repository
+game-preview*.png

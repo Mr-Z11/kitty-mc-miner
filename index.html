@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="小猫挖矿 MC 版：挖方块、卖矿石、升级镐子和背包。"
+    />
+    <title>小猫挖矿 MC 版</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./cave-game.js"></script>
+    <script defer src="./game.js"></script>
+  </head>
+  <body>
+    <div class="screen-noise" aria-hidden="true"></div>
+    <div class="cave-lamp cave-lamp-left" aria-hidden="true"></div>
+    <div class="cave-lamp cave-lamp-right" aria-hidden="true"></div>
+
+    <div class="game-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <div class="brand-cube" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div>
+            <p class="eyebrow">BLOCKY CAT EXPEDITION</p>
+            <h1>小猫挖矿 <b>MC</b> 版</h1>
+          </div>
+        </div>
+
+        <div class="top-stats" aria-label="游戏状态">
+          <div class="stat-chip coin-chip">
+            <span class="stat-icon">¢</span>
+            <div><small>金币</small><strong id="coinCount">0</strong></div>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-icon depth-icon">↓</span>
+            <div><small>深度</small><strong><span id="depthCount">1</span> m</strong></div>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-icon block-icon">◆</span>
+            <div><small>已挖方块</small><strong id="minedCount">0</strong></div>
+          </div>
+          <div class="stat-chip level-chip">
+            <span class="stat-icon level-icon">★</span>
+            <div>
+              <small>矿工等级</small>
+              <strong>Lv.<span id="levelCount">1</span></strong>
+              <span class="mini-meter"><i id="xpMeter"></i></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button class="square-button" id="soundToggle" type="button" aria-label="切换音效" title="切换音效">
+            ♪
+          </button>
+          <button class="square-button" id="resetGame" type="button" aria-label="重置进度" title="重置进度">
+            ↻
+          </button>
+        </div>
+      </header>
+
+      <main class="game-layout">
+        <aside class="panel inventory-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">STORAGE</p>
+              <h2>背包</h2>
+            </div>
+            <span class="panel-tag" id="packName">布口袋</span>
+          </div>
+
+          <div class="capacity-card">
+            <div class="capacity-row">
+              <span>容量</span>
+              <strong><span id="packUsed">0</span> / <span id="packCapacity">20</span></strong>
+            </div>
+            <div class="meter"><span id="packMeter"></span></div>
+          </div>
+
+          <div class="inventory-list" id="inventoryList"></div>
+
+          <button class="primary-button sell-button" id="sellAll" type="button">
+            <span>出售全部</span>
+            <strong id="sellValue">+ 0 ¢</strong>
+          </button>
+
+          <div class="tool-card">
+            <div class="tool-illustration" aria-hidden="true">
+              <i class="tool-handle"></i><i class="tool-head"></i>
+            </div>
+            <div>
+              <small>当前工具</small>
+              <h3 id="currentTool">木镐</h3>
+              <p>每次造成 <b id="toolDamage">1</b> 点挖掘力</p>
+            </div>
+          </div>
+
+          <section class="equipment-card">
+            <div class="section-title">
+              <h3>装备区</h3>
+              <small>护甲 <b id="armorScore">0</b></small>
+            </div>
+            <div class="equipment-grid" id="equipmentGrid"></div>
+          </section>
+
+          <section class="village-card">
+            <div class="section-title">
+              <h3>猫猫村庄</h3>
+              <small id="storyChapter">第 1 章 / 5</small>
+            </div>
+            <div class="story-copy">
+              <span class="story-lamp" aria-hidden="true">✹</span>
+              <div>
+                <strong id="storyTitle">熄灭的矿灯</strong>
+                <p id="storyDescription">重新点亮村口矿灯，照出通往青石矿道的旧路。</p>
+              </div>
+            </div>
+            <div class="village-structures" id="villageStructures"></div>
+            <div class="village-action" id="villageAction"></div>
+          </section>
+        </aside>
+
+        <section class="mine-panel">
+          <div class="mine-topline">
+            <div>
+              <p class="eyebrow">ACTIVE MINE SHAFT</p>
+              <h2 id="zoneName">林地浅层</h2>
+            </div>
+            <div class="streak-box">
+              <small>连击</small>
+              <strong><span id="streakCount">0</span><em>x</em></strong>
+            </div>
+          </div>
+
+          <div class="zone-track" aria-label="探索进度">
+            <span id="zoneProgress"></span>
+          </div>
+
+          <div class="mine-scene" id="mineScene">
+            <canvas
+              id="caveCanvas"
+              width="960"
+              height="540"
+              tabindex="0"
+              aria-label="可操控的小猫矿洞，使用方向键或 A、D 移动，W、上方向键或空格跳跃，E 挖矿，F 挥剑"
+            ></canvas>
+
+            <div class="cave-hud">
+              <div class="cave-hud-row">
+                <span class="cave-hud-label">生命</span>
+                <strong id="caveHealth">♥ ♥ ♥ ♥ ♥</strong>
+              </div>
+              <div class="cave-hud-row">
+                <span class="cave-hud-label">武器</span>
+                <strong id="swordHud">木剑 · 普通</strong>
+              </div>
+              <div class="cave-hud-row">
+                <span class="cave-hud-label">护甲</span>
+                <strong id="caveArmor">0</strong>
+              </div>
+              <div class="cave-hud-row">
+                <span class="cave-hud-label">镐耐久</span>
+                <strong id="caveDurability">18 / 18</strong>
+              </div>
+            </div>
+
+            <div class="boss-hud hidden" id="bossHud">
+              <div><small>区域 BOSS</small><strong id="bossName">腐化史莱姆王</strong></div>
+              <span><i id="bossMeter"></i></span>
+            </div>
+
+            <div class="cave-hint" id="caveHint">方向键移动，按 E 挖矿；按住方向再按 E 可定向挖掘</div>
+            <div class="cave-hotbar">
+              <span><kbd>←</kbd><kbd>→</kbd><kbd>A</kbd><kbd>D</kbd> 移动</span>
+              <span><kbd>↑</kbd><kbd>W</kbd><kbd>空格</kbd> 跳跃</span>
+              <span><kbd>E</kbd> 挖矿</span>
+              <span><kbd>F</kbd> 挥剑</span>
+              <span><kbd>Q</kbd> 补给换班</span>
+            </div>
+            <div class="mobile-controls" aria-label="矿洞触控操作">
+              <button type="button" data-cave-control="left">←</button>
+              <button type="button" data-cave-control="right">→</button>
+              <button type="button" data-cave-control="jump">↑</button>
+              <button type="button" data-cave-control="mine">⛏</button>
+              <button type="button" data-cave-control="attack">⚔</button>
+            </div>
+          </div>
+
+          <div class="mine-footer">
+            <div>
+              <p><b>操控小猫探索矿洞</b>，方向键移动，按 <b>E</b> 挖矿。镐子耐久耗尽后按 <b>Q</b> 补给换班。</p>
+              <div class="key-hints">
+                <span><kbd>S</kbd> 出售</span>
+                <span><kbd>M</kbd> 音效</span>
+                <span><kbd>R</kbd> 重置矿洞位置</span>
+              </div>
+            </div>
+            <button class="adventure-trigger" id="openAdventure" type="button">
+              <span class="adventure-trigger-icon">⚑</span>
+              <span><b>探险模式</b><small><i id="ticketCount">3</i> / 3 探险券</small></span>
+            </button>
+          </div>
+        </section>
+
+        <aside class="panel shop-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">UNDERGROUND SHOP</p>
+              <h2>矿洞商店</h2>
+            </div>
+            <span class="panel-tag shop-tag">营业中</span>
+          </div>
+
+          <section class="shop-section">
+            <div class="section-title">
+              <h3>镐子升级</h3>
+              <small>挖得更快</small>
+            </div>
+            <div class="shop-list" id="toolShop"></div>
+          </section>
+
+          <section class="shop-section">
+            <div class="section-title">
+              <h3>背包升级</h3>
+              <small>装得更多</small>
+            </div>
+            <div class="shop-list" id="packShop"></div>
+          </section>
+
+          <section class="shop-section workshop-section">
+            <div class="section-title">
+              <h3>剑转换台</h3>
+              <small>逐级提升品质</small>
+            </div>
+            <div class="shop-list" id="swordShop"></div>
+          </section>
+
+          <section class="shop-section">
+            <div class="section-title">
+              <h3>护甲锻造</h3>
+              <small>头盔、胸甲、护腿、靴子</small>
+            </div>
+            <div class="shop-list" id="armorShop"></div>
+          </section>
+
+          <section class="shop-section workshop-section">
+            <div class="section-title">
+              <h3>矿工工坊</h3>
+              <small>永久强化</small>
+            </div>
+            <div class="shop-list" id="perkShop"></div>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="statusbar">
+        <div class="status-objective">
+          <span class="pulse-dot"></span>
+          <div>
+            <small>当前目标</small>
+            <strong id="currentObjective">挖矿并攒下第一桶金币</strong>
+          </div>
+        </div>
+        <div class="ticker">
+          <span>矿洞通讯</span>
+          <p id="eventLog">村口矿灯熄灭，地底传来异响。</p>
+        </div>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="adventure-modal hidden" id="adventureModal" role="dialog" aria-modal="true" aria-labelledby="adventureTitle">
+      <div class="adventure-card">
+        <header class="adventure-header">
+          <div>
+            <p class="eyebrow">CAT MINER FIELD JOURNAL</p>
+            <h2 id="adventureTitle">探险模式</h2>
+          </div>
+          <button class="square-button" id="closeAdventure" type="button" aria-label="关闭探险模式">×</button>
+        </header>
+
+        <section class="route-select" id="routeSelect">
+          <div class="adventure-intro">
+            <p>带上矿灯，选择一条路线。每次探险消耗 1 张探险券，途中可以随时撤离并保留战利品。</p>
+            <strong><span id="modalTicketCount">3</span> / 3 探险券</strong>
+          </div>
+          <div class="route-list" id="routeList"></div>
+        </section>
+
+        <section class="expedition-screen hidden" id="expeditionScreen">
+          <div class="expedition-topline">
+            <div>
+              <p class="eyebrow">ACTIVE EXPEDITION</p>
+              <h3 id="expeditionRouteName">废弃矿道</h3>
+            </div>
+            <div class="expedition-health">
+              <small>体力</small>
+              <strong id="expeditionHealth">♥ ♥ ♥</strong>
+            </div>
+          </div>
+
+          <div class="expedition-path" id="expeditionPath" aria-label="探险进度"></div>
+
+          <div class="expedition-scene" id="expeditionScene">
+            <span class="scene-lantern" aria-hidden="true">✦</span>
+            <div class="expedition-cat" aria-hidden="true">ฅ^•ﻌ•^ฅ</div>
+            <p id="expeditionEvent">小猫握紧矿灯，准备迈出第一步。</p>
+          </div>
+
+          <div class="expedition-loot">
+            <div class="section-title">
+              <h3>临时战利品袋</h3>
+              <small id="expeditionStep">0 / 4 步</small>
+            </div>
+            <div class="loot-list" id="expeditionLoot"></div>
+          </div>
+
+          <div class="expedition-actions">
+            <button class="secondary-button" id="retreatExpedition" type="button">撤离并带走战利品</button>
+            <button class="primary-button" id="advanceExpedition" type="button">向前探索</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="intro-modal" id="introModal" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+      <div class="intro-card">
+        <p class="eyebrow">NEW EXPEDITION</p>
+        <div class="intro-cat" aria-hidden="true">ฅ^•ﻌ•^ฅ</div>
+        <h2 id="introTitle">矿灯熄灭了，出发吧！</h2>
+        <p>猫猫村庄的地心矿灯熄灭了。进入矿洞采集材料，修复村庄工程，击败盘踞各层的 Boss，再让地底重新亮起来。</p>
+        <div class="intro-tips">
+          <span><i class="mini-block type-wood"></i> 木材</span>
+          <span><i class="mini-block type-stone"></i> 石材</span>
+          <span><i class="mini-block type-diamond"></i> 钻石</span>
+        </div>
+        <button class="primary-button" id="startGame" type="button">开始挖矿</button>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,1464 @@
+"use strict";
+
+const SAVE_KEY = "kitty-mc-miner-save-v1";
+const MAX_TICKETS = 3;
+const TICKET_MINE_INTERVAL = 12;
+
+const MATERIALS = {
+  wood: { name: "木材", value: 3, hp: 1 },
+  stone: { name: "石材", value: 5, hp: 2 },
+  iron: { name: "铁矿", value: 12, hp: 4 },
+  gold: { name: "黄金", value: 24, hp: 5 },
+  diamond: { name: "钻石", value: 58, hp: 7 },
+};
+
+const TOOLS = [
+  { name: "木镐", damage: 1, price: 0, depth: 1 },
+  { name: "石镐", damage: 2, price: 70, depth: 2 },
+  { name: "铁镐", damage: 4, price: 240, depth: 8 },
+  { name: "黄金镐", damage: 6, price: 580, depth: 16 },
+  { name: "钻石镐", damage: 10, price: 1380, depth: 27 },
+];
+
+const SWORDS = [
+  { name: "木剑", quality: "普通", qualityClass: "common", damage: 2, price: 0, color: "#b57a43" },
+  { name: "石剑", quality: "优秀", qualityClass: "uncommon", damage: 4, price: 90, color: "#aab4ae" },
+  { name: "铁剑", quality: "稀有", qualityClass: "rare", damage: 7, price: 260, color: "#d5ddd5" },
+  { name: "黄金剑", quality: "史诗", qualityClass: "epic", damage: 11, price: 640, color: "#ffd05c" },
+  { name: "钻石剑", quality: "传说", qualityClass: "legendary", damage: 17, price: 1480, color: "#70e6dd" },
+];
+
+const ARMOR_SLOTS = {
+  helmet: { name: "头盔", icon: "⌂", multiplier: 0.8 },
+  chestplate: { name: "胸甲", icon: "▣", multiplier: 1.6 },
+  leggings: { name: "护腿", icon: "Ⅱ", multiplier: 1.25 },
+  boots: { name: "靴子", icon: "∪", multiplier: 0.65 },
+};
+
+const ARMOR_TIERS = [
+  { name: "未装备", quality: "空", qualityClass: "common", defense: 0, price: 0 },
+  { name: "皮革", quality: "普通", qualityClass: "common", defense: 1, price: 70 },
+  { name: "铁制", quality: "稀有", qualityClass: "rare", defense: 2, price: 220 },
+  { name: "钻石", quality: "传说", qualityClass: "legendary", defense: 4, price: 680 },
+];
+
+const BACKPACKS = [
+  { name: "布口袋", capacity: 20, price: 0 },
+  { name: "皮革背包", capacity: 42, price: 90 },
+  { name: "铁扣矿包", capacity: 78, price: 320 },
+  { name: "钻石箱包", capacity: 140, price: 880 },
+];
+
+const ZONES = [
+  { name: "林地浅层", from: 1, to: 7 },
+  { name: "青石矿道", from: 8, to: 15 },
+  { name: "铁脉深井", from: 16, to: 26 },
+  { name: "熔金洞穴", from: 27, to: 39 },
+  { name: "钻石地心", from: 40, to: Infinity },
+];
+
+const STORY_CHAPTERS = [
+  {
+    id: "lamp-tower",
+    title: "熄灭的矿灯",
+    zone: "林地浅层",
+    maxDepth: 7,
+    building: {
+      id: "lampTower",
+      icon: "✹",
+      name: "矿灯塔",
+      description: "重新点亮村口矿灯，照出通往青石矿道的旧路。",
+      effect: "镐耐久 +4",
+      cost: { wood: 8, stone: 6, coins: 36 },
+    },
+    boss: { id: "slime-king", name: "腐化史莱姆王", color: "#a6c94f", hp: 30, damage: 2, reward: 90, xp: 38 },
+    unlock: "青石矿道",
+  },
+  {
+    id: "mine-lift",
+    title: "失速的升降机",
+    zone: "青石矿道",
+    maxDepth: 15,
+    building: {
+      id: "mineLift",
+      icon: "↕",
+      name: "矿井升降机",
+      description: "修好升降机，才能把补给送往更深的铁脉矿层。",
+      effect: "补给费 -15%",
+      cost: { wood: 12, stone: 18, iron: 6, coins: 120 },
+    },
+    boss: { id: "spider-queen", name: "岩穴蜘蛛女王", color: "#a56f72", hp: 62, damage: 3, reward: 210, xp: 72 },
+    unlock: "铁脉深井",
+  },
+  {
+    id: "forge",
+    title: "失踪的铁匠",
+    zone: "铁脉深井",
+    maxDepth: 26,
+    building: {
+      id: "forge",
+      icon: "⚒",
+      name: "村庄铁匠铺",
+      description: "救回铁匠留下的工坊图纸，锻造能抵抗热浪的护甲。",
+      effect: "总护甲 +2",
+      cost: { stone: 20, iron: 18, gold: 4, coins: 260 },
+    },
+    boss: { id: "zombie-captain", name: "地底僵尸队长", color: "#6f9671", hp: 105, damage: 4, reward: 430, xp: 120 },
+    unlock: "熔金洞穴",
+  },
+  {
+    id: "lava-pump",
+    title: "熔岩之下",
+    zone: "熔金洞穴",
+    maxDepth: 39,
+    building: {
+      id: "lavaPump",
+      icon: "▲",
+      name: "熔岩冷却泵",
+      description: "为深井降温，打开被热浪封住的地心通道。",
+      effect: "镐耐久 +6",
+      cost: { iron: 20, gold: 16, diamond: 3, coins: 560 },
+    },
+    boss: { id: "lava-warden", name: "熔岩核心守卫", color: "#d87946", hp: 168, damage: 5, reward: 820, xp: 190 },
+    unlock: "钻石地心",
+  },
+  {
+    id: "heart-beacon",
+    title: "地心最后的光",
+    zone: "钻石地心",
+    maxDepth: Infinity,
+    building: {
+      id: "heartBeacon",
+      icon: "◆",
+      name: "地心信标",
+      description: "将钻石晶体装入信标，唤醒守护村庄的地心矿灯。",
+      effect: "幸运掉落 +10%",
+      cost: { gold: 24, diamond: 12, coins: 980 },
+    },
+    boss: { id: "crystal-colossus", name: "黑暗晶体巨像", color: "#62d7d4", hp: 260, damage: 6, reward: 1600, xp: 320 },
+    unlock: "自由深渊模式",
+  },
+];
+
+const PERKS = {
+  sharpness: {
+    name: "锋利附魔",
+    icon: "✦",
+    max: 5,
+    prices: [80, 170, 300, 480, 760],
+    effect: (level) => `暴击 ${level * 6}%`,
+  },
+  fortune: {
+    name: "幸运附魔",
+    icon: "◆",
+    max: 5,
+    prices: [110, 220, 390, 620, 960],
+    effect: (level) => `双倍掉落 ${level * 5}%`,
+  },
+  armor: {
+    name: "探险护甲",
+    icon: "♥",
+    max: 4,
+    prices: [100, 230, 460, 820],
+    effect: (level) => `探险体力 ${3 + level}`,
+  },
+  lantern: {
+    name: "寻宝矿灯",
+    icon: "✧",
+    max: 4,
+    prices: [130, 290, 540, 940],
+    effect: (level) => `宝箱金币 +${level * 15}%`,
+  },
+};
+
+const ROUTES = [
+  {
+    id: "old-shaft",
+    name: "废弃矿道",
+    symbol: "▥",
+    color: "#c8df68",
+    unlockDepth: 2,
+    steps: 4,
+    danger: 1,
+    clearBonus: 28,
+    clearXp: 18,
+    description: "旧木架后藏着零散矿脉，适合第一次离开主矿井。",
+    materials: ["wood", "stone", "stone", "iron"],
+  },
+  {
+    id: "crystal-cave",
+    name: "水晶洞穴",
+    symbol: "◇",
+    color: "#72d8cf",
+    unlockDepth: 12,
+    steps: 6,
+    danger: 2,
+    clearBonus: 85,
+    clearXp: 42,
+    description: "潮湿洞壁闪着蓝光，珍贵矿石更多，塌方也更加频繁。",
+    materials: ["stone", "iron", "iron", "gold", "diamond"],
+  },
+  {
+    id: "lava-ruins",
+    name: "熔岩遗迹",
+    symbol: "▲",
+    color: "#e78548",
+    unlockDepth: 26,
+    steps: 8,
+    danger: 3,
+    clearBonus: 190,
+    clearXp: 85,
+    description: "热浪深处埋着古老矿藏，只有准备充分的矿工能全身而退。",
+    materials: ["iron", "gold", "gold", "diamond", "diamond"],
+  },
+];
+
+const defaultInventory = () => ({
+  wood: 0,
+  stone: 0,
+  iron: 0,
+  gold: 0,
+  diamond: 0,
+});
+
+const defaultPerks = () => ({
+  sharpness: 0,
+  fortune: 0,
+  armor: 0,
+  lantern: 0,
+});
+
+const defaultEquipment = () => ({
+  helmet: 0,
+  chestplate: 0,
+  leggings: 0,
+  boots: 0,
+});
+
+const defaultVillage = () => Object.fromEntries(
+  STORY_CHAPTERS.map((chapter) => [chapter.building.id, false])
+);
+
+const initialState = () => ({
+  coins: 0,
+  depth: 1,
+  mined: 0,
+  streak: 0,
+  lastMineAt: 0,
+  toolIndex: 0,
+  pickaxeDurability: null,
+  shiftsStarted: 0,
+  backpackIndex: 0,
+  swordIndex: 0,
+  equipment: defaultEquipment(),
+  inventory: defaultInventory(),
+  xp: 0,
+  expeditionTickets: MAX_TICKETS,
+  ticketMilestone: 0,
+  perks: defaultPerks(),
+  expedition: null,
+  bestExpedition: 0,
+  storyChapter: 0,
+  village: defaultVillage(),
+  defeatedBosses: [],
+  soundOn: true,
+  tutorialSeen: false,
+});
+
+let state = loadGame();
+normalizeStoryState();
+normalizePickaxeDurability();
+let audioContext;
+let toastTimer;
+let caveGame;
+
+const dom = {
+  coinCount: document.querySelector("#coinCount"),
+  depthCount: document.querySelector("#depthCount"),
+  minedCount: document.querySelector("#minedCount"),
+  levelCount: document.querySelector("#levelCount"),
+  xpMeter: document.querySelector("#xpMeter"),
+  streakCount: document.querySelector("#streakCount"),
+  zoneName: document.querySelector("#zoneName"),
+  zoneProgress: document.querySelector("#zoneProgress"),
+  packName: document.querySelector("#packName"),
+  packUsed: document.querySelector("#packUsed"),
+  packCapacity: document.querySelector("#packCapacity"),
+  packMeter: document.querySelector("#packMeter"),
+  inventoryList: document.querySelector("#inventoryList"),
+  sellAll: document.querySelector("#sellAll"),
+  sellValue: document.querySelector("#sellValue"),
+  currentTool: document.querySelector("#currentTool"),
+  toolDamage: document.querySelector("#toolDamage"),
+  armorScore: document.querySelector("#armorScore"),
+  equipmentGrid: document.querySelector("#equipmentGrid"),
+  toolShop: document.querySelector("#toolShop"),
+  packShop: document.querySelector("#packShop"),
+  swordShop: document.querySelector("#swordShop"),
+  armorShop: document.querySelector("#armorShop"),
+  perkShop: document.querySelector("#perkShop"),
+  caveCanvas: document.querySelector("#caveCanvas"),
+  caveHealth: document.querySelector("#caveHealth"),
+  swordHud: document.querySelector("#swordHud"),
+  caveArmor: document.querySelector("#caveArmor"),
+  caveDurability: document.querySelector("#caveDurability"),
+  bossHud: document.querySelector("#bossHud"),
+  bossName: document.querySelector("#bossName"),
+  bossMeter: document.querySelector("#bossMeter"),
+  caveHint: document.querySelector("#caveHint"),
+  storyChapter: document.querySelector("#storyChapter"),
+  storyTitle: document.querySelector("#storyTitle"),
+  storyDescription: document.querySelector("#storyDescription"),
+  villageStructures: document.querySelector("#villageStructures"),
+  villageAction: document.querySelector("#villageAction"),
+  currentObjective: document.querySelector("#currentObjective"),
+  eventLog: document.querySelector("#eventLog"),
+  soundToggle: document.querySelector("#soundToggle"),
+  resetGame: document.querySelector("#resetGame"),
+  toast: document.querySelector("#toast"),
+  introModal: document.querySelector("#introModal"),
+  startGame: document.querySelector("#startGame"),
+  openAdventure: document.querySelector("#openAdventure"),
+  ticketCount: document.querySelector("#ticketCount"),
+  adventureModal: document.querySelector("#adventureModal"),
+  closeAdventure: document.querySelector("#closeAdventure"),
+  modalTicketCount: document.querySelector("#modalTicketCount"),
+  routeSelect: document.querySelector("#routeSelect"),
+  routeList: document.querySelector("#routeList"),
+  expeditionScreen: document.querySelector("#expeditionScreen"),
+  expeditionRouteName: document.querySelector("#expeditionRouteName"),
+  expeditionHealth: document.querySelector("#expeditionHealth"),
+  expeditionPath: document.querySelector("#expeditionPath"),
+  expeditionScene: document.querySelector("#expeditionScene"),
+  expeditionEvent: document.querySelector("#expeditionEvent"),
+  expeditionStep: document.querySelector("#expeditionStep"),
+  expeditionLoot: document.querySelector("#expeditionLoot"),
+  retreatExpedition: document.querySelector("#retreatExpedition"),
+  advanceExpedition: document.querySelector("#advanceExpedition"),
+};
+
+function loadGame() {
+  const fresh = initialState();
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (!saved) return fresh;
+    return {
+      ...fresh,
+      ...saved,
+      inventory: { ...fresh.inventory, ...saved.inventory },
+      perks: { ...fresh.perks, ...saved.perks },
+      equipment: { ...fresh.equipment, ...saved.equipment },
+      village: { ...fresh.village, ...saved.village },
+    };
+  } catch {
+    return fresh;
+  }
+}
+
+function saveGame() {
+  localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+}
+
+function inventoryTotal() {
+  return Object.values(state.inventory).reduce((sum, amount) => sum + amount, 0);
+}
+
+function inventoryValue() {
+  return Object.entries(state.inventory).reduce(
+    (sum, [type, amount]) => sum + MATERIALS[type].value * amount,
+    0
+  );
+}
+
+function normalizeStoryState() {
+  state.storyChapter = Math.max(0, Math.min(STORY_CHAPTERS.length, Number(state.storyChapter) || 0));
+  state.village = { ...defaultVillage(), ...state.village };
+  state.defeatedBosses = Array.isArray(state.defeatedBosses) ? state.defeatedBosses : [];
+  const depth = Math.max(1, Number(state.depth) || 1);
+  state.depth = Math.min(depth, activeStoryChapter()?.maxDepth ?? depth);
+}
+
+function activeStoryChapter() {
+  return STORY_CHAPTERS[state.storyChapter] || null;
+}
+
+function isVillageBuilt(buildingId) {
+  return Boolean(state.village[buildingId]);
+}
+
+function accessibleDepth() {
+  const chapter = activeStoryChapter();
+  return Math.min(state.depth, chapter?.maxDepth ?? state.depth);
+}
+
+function formatRequirement(cost) {
+  return Object.entries(cost)
+    .map(([type, amount]) => type === "coins" ? `${amount} 金币` : `${MATERIALS[type].name} × ${amount}`)
+    .join(" · ");
+}
+
+function missingRequirement(cost) {
+  return Object.entries(cost)
+    .filter(([type, amount]) => type === "coins" ? state.coins < amount : state.inventory[type] < amount)
+    .map(([type, amount]) => type === "coins"
+      ? `${amount - state.coins} 金币`
+      : `${MATERIALS[type].name} ${amount - state.inventory[type]} 块`
+    )
+    .join("、");
+}
+
+function maxPickaxeDurability() {
+  return 18 + state.toolIndex * 6 + (isVillageBuilt("lampTower") ? 4 : 0) + (isVillageBuilt("lavaPump") ? 6 : 0);
+}
+
+function shiftSupplyCost() {
+  const baseCost = 12 + state.toolIndex * 18;
+  return Math.max(1, Math.round(baseCost * (isVillageBuilt("mineLift") ? 0.85 : 1)));
+}
+
+function normalizePickaxeDurability() {
+  if (!Number.isFinite(state.pickaxeDurability)) {
+    state.pickaxeDurability = maxPickaxeDurability();
+    return;
+  }
+  state.pickaxeDurability = Math.max(0, Math.min(maxPickaxeDurability(), state.pickaxeDurability));
+}
+
+function currentSword() {
+  return SWORDS[state.swordIndex];
+}
+
+function armorScore() {
+  const equipmentArmor = Object.entries(state.equipment).reduce((sum, [slotId, tierIndex]) => {
+    const tier = ARMOR_TIERS[tierIndex];
+    return sum + Math.round(tier.defense * ARMOR_SLOTS[slotId].multiplier);
+  }, 0);
+  return equipmentArmor + (isVillageBuilt("forge") ? 2 : 0);
+}
+
+function fortuneChance() {
+  return state.perks.fortune * 0.05 + (isVillageBuilt("heartBeacon") ? 0.1 : 0);
+}
+
+function armorPrice(slotId, tierIndex) {
+  return Math.round(ARMOR_TIERS[tierIndex].price * ARMOR_SLOTS[slotId].multiplier);
+}
+
+function xpForLevel(level) {
+  return ((level - 1) * level * 16);
+}
+
+function playerLevel() {
+  let level = 1;
+  while (state.xp >= xpForLevel(level + 1)) level += 1;
+  return level;
+}
+
+function addXp(amount) {
+  const oldLevel = playerLevel();
+  state.xp += amount;
+  const newLevel = playerLevel();
+  if (newLevel > oldLevel) {
+    showToast(`矿工等级提升至 Lv.${newLevel}！`);
+    logEvent(`积累的经验有了回报，猫猫矿工升到了 Lv.${newLevel}。`);
+    playTone("upgrade");
+  }
+}
+
+function maxAdventureHealth() {
+  return 3 + state.perks.armor;
+}
+
+function routeById(routeId) {
+  return ROUTES.find((route) => route.id === routeId);
+}
+
+function randomBetween(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function addMiningTicket() {
+  const milestone = Math.floor(state.mined / TICKET_MINE_INTERVAL);
+  if (milestone <= state.ticketMilestone) return;
+
+  const previousTickets = state.expeditionTickets;
+  state.expeditionTickets = Math.min(MAX_TICKETS, state.expeditionTickets + milestone - state.ticketMilestone);
+  state.ticketMilestone = milestone;
+  if (state.expeditionTickets > previousTickets) {
+    showToast("挖矿进度奖励：获得 1 张探险券。");
+  }
+}
+
+function currentZone() {
+  const depth = accessibleDepth();
+  return ZONES.find((zone) => depth >= zone.from && depth <= zone.to) || ZONES[0];
+}
+
+function renderAll() {
+  renderStats();
+  renderInventory();
+  renderShop();
+  renderVillage();
+  renderObjective();
+  renderAdventure();
+  renderCaveHud();
+}
+
+function renderStats() {
+  const zone = currentZone();
+  const progress =
+    zone.to === Infinity ? 100 : ((state.depth - zone.from + 1) / (zone.to - zone.from + 1)) * 100;
+
+  dom.coinCount.textContent = state.coins.toLocaleString("zh-CN");
+  dom.depthCount.textContent = accessibleDepth();
+  dom.minedCount.textContent = state.mined;
+  dom.streakCount.textContent = state.streak;
+  dom.zoneName.textContent = zone.name;
+  dom.zoneProgress.style.width = `${Math.min(100, progress)}%`;
+
+  const level = playerLevel();
+  const currentLevelXp = xpForLevel(level);
+  const nextLevelXp = xpForLevel(level + 1);
+  const xpProgress = ((state.xp - currentLevelXp) / (nextLevelXp - currentLevelXp)) * 100;
+  dom.levelCount.textContent = level;
+  dom.xpMeter.style.width = `${Math.min(100, xpProgress)}%`;
+  dom.ticketCount.textContent = state.expeditionTickets;
+}
+
+function renderInventory() {
+  const backpack = BACKPACKS[state.backpackIndex];
+  const used = inventoryTotal();
+  const percent = (used / backpack.capacity) * 100;
+
+  dom.packName.textContent = backpack.name;
+  dom.packUsed.textContent = used;
+  dom.packCapacity.textContent = backpack.capacity;
+  dom.packMeter.style.width = `${Math.min(100, percent)}%`;
+  dom.packMeter.parentElement.classList.toggle("near-full", percent >= 80);
+  dom.sellValue.textContent = `+ ${inventoryValue().toLocaleString("zh-CN")} ¢`;
+
+  dom.inventoryList.innerHTML = Object.entries(MATERIALS)
+    .map(
+      ([type, material]) => `
+        <div class="inventory-item">
+          <i class="mini-block type-${type}" aria-hidden="true"></i>
+          <span>${material.name}</span>
+          <strong>${state.inventory[type]}</strong>
+        </div>
+      `
+    )
+    .join("");
+
+  const tool = TOOLS[state.toolIndex];
+  dom.currentTool.textContent = tool.name;
+  dom.toolDamage.textContent = tool.damage;
+  renderEquipment();
+}
+
+function renderEquipment() {
+  dom.armorScore.textContent = armorScore();
+  dom.equipmentGrid.innerHTML = Object.entries(ARMOR_SLOTS)
+    .map(([slotId, slot]) => {
+      const tier = ARMOR_TIERS[state.equipment[slotId]];
+      return `
+        <div class="equipment-slot">
+          <small>${slot.icon} ${slot.name}</small>
+          <strong class="quality-${tier.qualityClass}">${tier.name}</strong>
+          <em>${tier.quality} · 护甲 ${Math.round(tier.defense * slot.multiplier)}</em>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderCaveHud(status) {
+  const sword = currentSword();
+  const caveStatus = status || caveGame?.getStatus();
+  dom.caveHealth.textContent = Array.from(
+    { length: caveStatus?.maxHp || 5 },
+    (_, index) => (index < (caveStatus?.hp ?? 5) ? "♥" : "♡")
+  ).join(" ");
+  dom.swordHud.textContent = `${sword.name} · ${sword.quality}`;
+  dom.swordHud.className = `quality-${sword.qualityClass}`;
+  dom.caveArmor.textContent = armorScore();
+  dom.caveDurability.textContent = `${state.pickaxeDurability} / ${maxPickaxeDurability()}`;
+  dom.caveDurability.classList.toggle("is-empty", state.pickaxeDurability <= 0);
+  dom.bossHud.classList.toggle("hidden", !caveStatus?.boss);
+  if (caveStatus?.boss) {
+    dom.bossName.textContent = caveStatus.boss.name;
+    dom.bossMeter.style.width = `${Math.max(0, (caveStatus.boss.hp / caveStatus.boss.maxHp) * 100)}%`;
+  }
+  if (caveStatus?.hint) dom.caveHint.textContent = caveStatus.hint;
+}
+
+function renderVillage() {
+  const chapter = activeStoryChapter();
+  const completed = !chapter;
+  dom.storyChapter.textContent = completed ? "主线完成" : `第 ${state.storyChapter + 1} 章 / ${STORY_CHAPTERS.length}`;
+  dom.storyTitle.textContent = completed ? "地心矿灯重新亮起" : chapter.title;
+  dom.storyDescription.textContent = completed
+    ? "猫猫村庄恢复了光亮。自由深渊模式已经开放，可以继续挑战更深的随机矿井。"
+    : chapter.building.description;
+
+  dom.villageStructures.innerHTML = STORY_CHAPTERS.map((story, index) => {
+    const built = isVillageBuilt(story.building.id);
+    const defeated = state.defeatedBosses.includes(story.boss.id);
+    const active = index === state.storyChapter;
+    const status = defeated ? "已净化" : built ? "待挑战" : active ? "待修复" : "未开放";
+    return `
+      <div class="village-structure ${built ? "built" : ""} ${active ? "active" : ""}">
+        <span aria-hidden="true">${story.building.icon}</span>
+        <div>
+          <strong>${story.building.name}</strong>
+          <small>${story.building.effect}</small>
+        </div>
+        <em>${status}</em>
+      </div>
+    `;
+  }).join("");
+
+  if (completed) {
+    dom.villageAction.innerHTML = '<p class="village-ending">信标已经点亮。继续深入矿井，收集钻石并完善村庄装备。</p>';
+    return;
+  }
+
+  const built = isVillageBuilt(chapter.building.id);
+  if (!built) {
+    dom.villageAction.innerHTML = `
+      <p>${formatRequirement(chapter.building.cost)}</p>
+      <button class="buy-button village-button" type="button" data-repair-building="${chapter.building.id}">
+        修复${chapter.building.name}
+      </button>
+    `;
+    return;
+  }
+
+  const bossActive = caveGame?.hasActiveBoss();
+  dom.villageAction.innerHTML = `
+    <p>工程完成。击败${chapter.boss.name}，解锁${chapter.unlock}。</p>
+    <button class="buy-button village-button boss-button" type="button" data-summon-boss="${chapter.boss.id}" ${bossActive ? "disabled" : ""}>
+      ${bossActive ? "Boss 已进入矿洞" : `召唤${chapter.boss.name}`}
+    </button>
+  `;
+}
+
+function renderShop() {
+  dom.toolShop.innerHTML = TOOLS.slice(1)
+    .map((tool, offset) => {
+      const index = offset + 1;
+      const owned = index <= state.toolIndex;
+      const next = index === state.toolIndex + 1;
+      const deepEnough = accessibleDepth() >= tool.depth;
+      const label = owned ? "已拥有" : next && deepEnough ? `${tool.price} ¢` : `深度 ${tool.depth}m`;
+      return `
+        <div class="shop-item">
+          <span class="shop-item-icon" aria-hidden="true">⛏</span>
+          <div class="shop-copy">
+            <strong>${tool.name}</strong>
+            <small>挖掘力 ${tool.damage}</small>
+          </div>
+          <button
+            class="buy-button"
+            type="button"
+            data-buy-tool="${index}"
+            ${owned || !next || !deepEnough ? "disabled" : ""}
+          >${label}</button>
+        </div>
+      `;
+    })
+    .join("");
+
+  dom.packShop.innerHTML = BACKPACKS.slice(1)
+    .map((backpack, offset) => {
+      const index = offset + 1;
+      const owned = index <= state.backpackIndex;
+      const next = index === state.backpackIndex + 1;
+      return `
+        <div class="shop-item">
+          <span class="shop-item-icon pack-icon" aria-hidden="true">▣</span>
+          <div class="shop-copy">
+            <strong>${backpack.name}</strong>
+            <small>容量 ${backpack.capacity}</small>
+          </div>
+          <button
+            class="buy-button"
+            type="button"
+            data-buy-pack="${index}"
+            ${owned || !next ? "disabled" : ""}
+          >${owned ? "已拥有" : `${backpack.price} ¢`}</button>
+        </div>
+      `;
+    })
+    .join("");
+
+  const sword = currentSword();
+  const nextSword = SWORDS[state.swordIndex + 1];
+  dom.swordShop.innerHTML = `
+    <div class="shop-item">
+      <span class="shop-item-icon perk-icon" aria-hidden="true">⚔</span>
+      <div class="shop-copy">
+        <strong class="quality-${sword.qualityClass}">${sword.name} · ${sword.quality}</strong>
+        <small>攻击 ${sword.damage}${nextSword ? ` → ${nextSword.name} · ${nextSword.quality}` : " · 已达顶级"}</small>
+      </div>
+      <button
+        class="buy-button"
+        type="button"
+        data-convert-sword="${state.swordIndex + 1}"
+        ${nextSword ? "" : "disabled"}
+      >${nextSword ? `${nextSword.price} ¢` : "已满级"}</button>
+    </div>
+  `;
+
+  dom.armorShop.innerHTML = Object.entries(ARMOR_SLOTS)
+    .map(([slotId, slot]) => {
+      const currentIndex = state.equipment[slotId];
+      const currentTier = ARMOR_TIERS[currentIndex];
+      const nextTier = ARMOR_TIERS[currentIndex + 1];
+      return `
+        <div class="shop-item">
+          <span class="shop-item-icon pack-icon" aria-hidden="true">${slot.icon}</span>
+          <div class="shop-copy">
+            <strong>${slot.name} · <i class="quality-${currentTier.qualityClass}">${currentTier.name}</i></strong>
+            <small>护甲 ${Math.round(currentTier.defense * slot.multiplier)}${nextTier ? ` → ${nextTier.name}` : " · 已达顶级"}</small>
+          </div>
+          <button
+            class="buy-button"
+            type="button"
+            data-craft-armor="${slotId}"
+            ${nextTier ? "" : "disabled"}
+          >${nextTier ? `${armorPrice(slotId, currentIndex + 1)} ¢` : "已满级"}</button>
+        </div>
+      `;
+    })
+    .join("");
+
+  dom.perkShop.innerHTML = Object.entries(PERKS)
+    .map(([perkId, perk]) => {
+      const level = state.perks[perkId];
+      const maxed = level >= perk.max;
+      const price = maxed ? null : perk.prices[level];
+      return `
+        <div class="shop-item">
+          <span class="shop-item-icon perk-icon" aria-hidden="true">${perk.icon}</span>
+          <div class="shop-copy">
+            <strong>${perk.name} <i>Lv.${level}</i></strong>
+            <small>${perk.effect(level)}</small>
+          </div>
+          <button
+            class="buy-button"
+            type="button"
+            data-buy-perk="${perkId}"
+            ${maxed ? "disabled" : ""}
+          >${maxed ? "已满级" : `${price} ¢`}</button>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderAdventure() {
+  dom.modalTicketCount.textContent = state.expeditionTickets;
+  if (!state.expedition) {
+    dom.routeSelect.classList.remove("hidden");
+    dom.expeditionScreen.classList.add("hidden");
+    renderRoutes();
+    return;
+  }
+
+  const expedition = state.expedition;
+  const route = routeById(expedition.routeId);
+  dom.routeSelect.classList.add("hidden");
+  dom.expeditionScreen.classList.remove("hidden");
+  dom.expeditionRouteName.textContent = route.name;
+  dom.expeditionHealth.textContent = Array.from(
+    { length: maxAdventureHealth() },
+    (_, index) => (index < expedition.hp ? "♥" : "♡")
+  ).join(" ");
+  dom.expeditionPath.style.setProperty("--path-steps", route.steps);
+  dom.expeditionPath.innerHTML = Array.from({ length: route.steps }, (_, index) => {
+    const className = index < expedition.step ? "done" : index === expedition.step ? "current" : "";
+    return `<i class="path-step ${className}"></i>`;
+  }).join("");
+  dom.expeditionScene.style.setProperty("--scene-color", route.color);
+  dom.expeditionEvent.textContent = expedition.lastEvent;
+  dom.expeditionStep.textContent = `${expedition.step} / ${route.steps} 步`;
+  dom.advanceExpedition.textContent = expedition.completed ? "领取终点奖励" : "向前探索";
+  dom.retreatExpedition.textContent = expedition.completed ? "稍后领取" : "撤离并带走战利品";
+  renderExpeditionLoot();
+}
+
+function renderRoutes() {
+  dom.routeList.innerHTML = ROUTES.map((route) => {
+    const unlocked = accessibleDepth() >= route.unlockDepth;
+    const hasTicket = state.expeditionTickets > 0;
+    const label = unlocked ? (hasTicket ? "开始探险" : "探险券不足") : `${route.unlockDepth}m 解锁`;
+    return `
+      <article class="route-card ${unlocked ? "" : "locked"}" style="--route-color: ${route.color}">
+        <span class="route-symbol" aria-hidden="true">${route.symbol}</span>
+        <h3>${route.name}</h3>
+        <p>${route.description}</p>
+        <div class="route-meta">
+          <span>${route.steps} 步路线</span>
+          <span>风险 ${"◆".repeat(route.danger)}</span>
+        </div>
+        <button
+          class="buy-button"
+          type="button"
+          data-start-route="${route.id}"
+          ${!unlocked || !hasTicket ? "disabled" : ""}
+        >${label}</button>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderExpeditionLoot() {
+  const expedition = state.expedition;
+  if (!expedition) return;
+
+  const materials = Object.entries(expedition.loot)
+    .filter(([, amount]) => amount > 0)
+    .map(([type, amount]) => `
+      <span class="loot-item">
+        <i class="mini-block type-${type}" aria-hidden="true"></i>
+        ${MATERIALS[type].name} × ${amount}
+      </span>
+    `);
+
+  if (expedition.coins > 0) {
+    materials.push(`<span class="loot-item loot-coins">¢ 金币 × ${expedition.coins}</span>`);
+  }
+
+  dom.expeditionLoot.innerHTML = materials.length
+    ? materials.join("")
+    : '<span class="loot-item">矿灯旁还是空的，继续向前探索。</span>';
+}
+
+function renderObjective() {
+  const chapter = activeStoryChapter();
+  const nextTool = TOOLS[state.toolIndex + 1];
+  const nextPack = BACKPACKS[state.backpackIndex + 1];
+
+  if (state.pickaxeDurability <= 0) {
+    dom.currentObjective.textContent = `镐子耐久耗尽：按 Q 支付 ${shiftSupplyCost()} 金币补给换班`;
+    return;
+  }
+
+  if (chapter && !isVillageBuilt(chapter.building.id)) {
+    dom.currentObjective.textContent = `主线：修复${chapter.building.name}，需要 ${formatRequirement(chapter.building.cost)}`;
+    return;
+  }
+
+  if (chapter) {
+    dom.currentObjective.textContent = `主线：召唤并击败${chapter.boss.name}，解锁${chapter.unlock}`;
+    return;
+  }
+
+  if (nextTool) {
+    dom.currentObjective.textContent =
+      state.depth < nextTool.depth
+        ? `继续深挖：在 ${nextTool.depth}m 解锁${nextTool.name}`
+        : `攒够 ${nextTool.price} 金币，购买${nextTool.name}`;
+    return;
+  }
+
+  if (nextPack) {
+    dom.currentObjective.textContent = `把背包升级为${nextPack.name}`;
+    return;
+  }
+
+  dom.currentObjective.textContent = "继续探索钻石地心，刷新最高深度";
+}
+
+function sellInventory() {
+  const value = inventoryValue();
+  if (!value) {
+    showToast("背包还是空的，先去敲几块方块吧。");
+    return;
+  }
+
+  state.coins += value;
+  state.inventory = defaultInventory();
+  showToast(`出售成功，获得 ${value} 金币。`);
+  logEvent(`矿物打包售出，入账 ${value} 金币。`);
+  playTone("coin");
+  renderAll();
+  saveGame();
+}
+
+function buyTool(index) {
+  const tool = TOOLS[index];
+  if (!tool || index !== state.toolIndex + 1 || accessibleDepth() < tool.depth) return;
+  if (state.coins < tool.price) {
+    showToast(`还差 ${tool.price - state.coins} 金币才能购买${tool.name}。`);
+    playTone("error");
+    return;
+  }
+
+  state.coins -= tool.price;
+  state.toolIndex = index;
+  state.pickaxeDurability = maxPickaxeDurability();
+  showToast(`装备成功：${tool.name}，挖掘力提升到 ${tool.damage}。`);
+  logEvent(`商店送来了${tool.name}，坚硬矿层也能轻松处理。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function buyBackpack(index) {
+  const backpack = BACKPACKS[index];
+  if (!backpack || index !== state.backpackIndex + 1) return;
+  if (state.coins < backpack.price) {
+    showToast(`还差 ${backpack.price - state.coins} 金币才能购买${backpack.name}。`);
+    playTone("error");
+    return;
+  }
+
+  state.coins -= backpack.price;
+  state.backpackIndex = index;
+  showToast(`背包升级为${backpack.name}，容量提升到 ${backpack.capacity}。`);
+  logEvent(`新背包到货，可以在矿洞里多待一会儿了。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function convertSword(index) {
+  const sword = SWORDS[index];
+  if (!sword || index !== state.swordIndex + 1) return;
+  if (state.coins < sword.price) {
+    showToast(`还差 ${sword.price - state.coins} 金币才能转换${sword.name}。`);
+    playTone("error");
+    return;
+  }
+
+  state.coins -= sword.price;
+  state.swordIndex = index;
+  showToast(`剑转换完成：${sword.name} · ${sword.quality}。`);
+  logEvent(`剑转换台亮起，猫猫装备了${sword.quality}品质的${sword.name}。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function craftArmor(slotId) {
+  const slot = ARMOR_SLOTS[slotId];
+  const nextIndex = state.equipment[slotId] + 1;
+  const tier = ARMOR_TIERS[nextIndex];
+  if (!slot || !tier) return;
+
+  const price = armorPrice(slotId, nextIndex);
+  if (state.coins < price) {
+    showToast(`还差 ${price - state.coins} 金币才能锻造${tier.name}${slot.name}。`);
+    playTone("error");
+    return;
+  }
+
+  state.coins -= price;
+  state.equipment[slotId] = nextIndex;
+  showToast(`已装备${tier.name}${slot.name}，总护甲提升至 ${armorScore()}。`);
+  logEvent(`护甲锻造完成：${tier.name}${slot.name}已放入装备栏。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function canCollectCaveMaterial() {
+  return inventoryTotal() < BACKPACKS[state.backpackIndex].capacity;
+}
+
+function collectCaveMaterial({ type }) {
+  const backpack = BACKPACKS[state.backpackIndex];
+  const luckyDrop = Math.random() < fortuneChance();
+  const amount = Math.min(luckyDrop ? 2 : 1, backpack.capacity - inventoryTotal());
+  state.inventory[type] += amount;
+  state.pickaxeDurability = Math.max(0, state.pickaxeDurability - 1);
+  state.mined += 1;
+  addXp(2);
+  addMiningTicket();
+  logEvent(luckyDrop && amount > 1
+    ? `幸运附魔生效，小猫挖到了双倍${MATERIALS[type].name}。`
+    : `小猫在矿洞中挖到了${MATERIALS[type].name}。`);
+  playTone(type === "diamond" ? "diamond" : "break");
+  renderAll();
+  saveGame();
+  return { amount, durability: state.pickaxeDurability, name: MATERIALS[type].name };
+}
+
+function descendCaveLayer() {
+  const chapter = activeStoryChapter();
+  if (caveGame?.hasActiveBoss()) {
+    const message = "区域 Boss 仍在矿洞中，先击败它才能继续下潜。";
+    showToast(message);
+    playTone("error");
+    return { advanced: false, message };
+  }
+
+  if (chapter && state.depth >= chapter.maxDepth) {
+    const message = `已抵达${chapter.zone}最深处 ${chapter.maxDepth}m。修复${chapter.building.name}并击败${chapter.boss.name}，才能继续下潜。`;
+    showToast(message);
+    playTone("error");
+    return { advanced: false, message };
+  }
+
+  state.depth += 1;
+  addXp(4);
+  const zone = currentZone();
+  showToast(`下潜成功：抵达 ${state.depth}m ${zone.name}。`);
+  logEvent(`小猫凿穿矿井底部，进入 ${state.depth}m ${zone.name}。新的矿层与怪物已经出现。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+  return { advanced: true, depth: state.depth, zone: zone.name };
+}
+
+function startNewMiningShift() {
+  const cost = shiftSupplyCost();
+  if (state.coins < cost) {
+    showToast(`补给费需要 ${cost} 金币，还差 ${cost - state.coins} 金币。先出售背包里的矿物。`);
+    logEvent("补给站暂未放行：先出售本班次采集的矿物，再开启新矿井。");
+    playTone("error");
+    return;
+  }
+
+  state.coins -= cost;
+  state.pickaxeDurability = maxPickaxeDurability();
+  state.shiftsStarted += 1;
+  if (caveGame) {
+    caveGame.generateWorld();
+    caveGame.resetPosition();
+  }
+  showToast(`补给完成：支付 ${cost} 金币，新的矿井班次已开启。`);
+  logEvent(`第 ${state.shiftsStarted + 1} 班矿井开始，镐子已修复并换上新的矿灯。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function defeatCaveEnemy({ id, isBoss, name, coins, xp }) {
+  state.coins += coins;
+  addXp(xp);
+  if (isBoss) {
+    completeStoryBoss(id);
+  } else {
+    showToast(`击败${name}，获得 ${coins} 金币。`);
+    logEvent(`${name}被击败，剑的品质正在改变矿洞里的生存方式。`);
+  }
+  playTone("coin");
+  renderAll();
+  saveGame();
+}
+
+function repairVillageBuilding(buildingId) {
+  const chapter = activeStoryChapter();
+  if (!chapter || chapter.building.id !== buildingId || isVillageBuilt(buildingId)) return;
+
+  const missing = missingRequirement(chapter.building.cost);
+  if (missing) {
+    showToast(`修复材料不足：还缺 ${missing}。`);
+    logEvent(`${chapter.building.name}仍在等待材料，先回矿洞继续采集。`);
+    playTone("error");
+    return;
+  }
+
+  Object.entries(chapter.building.cost).forEach(([type, amount]) => {
+    if (type === "coins") {
+      state.coins -= amount;
+      return;
+    }
+    state.inventory[type] -= amount;
+  });
+  state.village[buildingId] = true;
+  normalizePickaxeDurability();
+  showToast(`${chapter.building.name}修复完成！${chapter.building.effect}。`);
+  logEvent(`${chapter.building.name}重新亮起。现在可以召唤${chapter.boss.name}，夺回通往${chapter.unlock}的道路。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function summonStoryBoss(bossId) {
+  const chapter = activeStoryChapter();
+  if (!chapter || chapter.boss.id !== bossId || !isVillageBuilt(chapter.building.id)) return;
+  if (!caveGame || caveGame.hasActiveBoss()) {
+    showToast("区域 Boss 已经进入矿洞。");
+    return;
+  }
+
+  caveGame.spawnBoss(chapter.boss);
+  showToast(`${chapter.boss.name}被矿灯吸引到了矿洞！`);
+  logEvent(`警报：${chapter.boss.name}出现。准备好剑与护甲，按 F 迎战。`);
+  playTone("error");
+  renderAll();
+}
+
+function completeStoryBoss(bossId) {
+  const chapter = activeStoryChapter();
+  if (!chapter || chapter.boss.id !== bossId) return;
+
+  state.defeatedBosses.push(bossId);
+  state.storyChapter += 1;
+  const nextChapter = activeStoryChapter();
+  showToast(nextChapter
+    ? `区域净化完成：${chapter.unlock}已经开放！`
+    : "地心矿灯重新亮起，主线完成！自由深渊模式已开放。"
+  );
+  logEvent(nextChapter
+    ? `${chapter.boss.name}倒下了。${chapter.unlock}的道路已经打开，村庄等待下一项修复工程。`
+    : "黑暗晶体巨像崩解，地心信标照亮了猫猫村庄。新的深渊挑战仍在地下等待。"
+  );
+}
+
+function handleCaveDeath() {
+  const lostCoins = Math.min(18, state.coins);
+  state.coins -= lostCoins;
+  showToast(`小猫回到入口，遗失 ${lostCoins} 金币。`);
+  logEvent("矿洞深处并不安全，锻造护甲后再继续推进。");
+  playTone("error");
+  renderAll();
+  saveGame();
+  return lostCoins;
+}
+
+function updateCaveStatus(status) {
+  renderCaveHud(status);
+}
+
+function createCaveGame() {
+  caveGame = new window.CaveGame(dom.caveCanvas, {
+    canCollect: canCollectCaveMaterial,
+    getConfig: () => {
+      const sword = currentSword();
+      return {
+        armor: armorScore(),
+        criticalChance: state.perks.sharpness * 0.06,
+        depth: accessibleDepth(),
+        durability: state.pickaxeDurability,
+        fortuneChance: fortuneChance(),
+        materialNames: Object.fromEntries(Object.entries(MATERIALS).map(([type, material]) => [type, material.name])),
+        swordColor: sword.color,
+        swordDamage: sword.damage,
+        swordName: sword.name,
+        swordQuality: sword.quality,
+        shiftCost: shiftSupplyCost(),
+        toolDamage: TOOLS[state.toolIndex].damage,
+      };
+    },
+    onDescend: descendCaveLayer,
+    onEnemyDefeated: defeatCaveEnemy,
+    onHint: (message) => {
+      dom.caveHint.textContent = message;
+    },
+    onMine: collectCaveMaterial,
+    onPlayerDeath: handleCaveDeath,
+    onStartShift: startNewMiningShift,
+    onStatus: updateCaveStatus,
+  });
+  window.caveGame = caveGame;
+}
+
+function buyPerk(perkId) {
+  const perk = PERKS[perkId];
+  const level = state.perks[perkId];
+  if (!perk || level >= perk.max) return;
+
+  const price = perk.prices[level];
+  if (state.coins < price) {
+    showToast(`还差 ${price - state.coins} 金币才能强化${perk.name}。`);
+    playTone("error");
+    return;
+  }
+
+  state.coins -= price;
+  state.perks[perkId] += 1;
+  showToast(`${perk.name}强化至 Lv.${state.perks[perkId]}。`);
+  logEvent(`工坊升级完成：${perk.name}，${perk.effect(state.perks[perkId])}。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function openAdventure() {
+  dom.adventureModal.classList.remove("hidden");
+  renderAdventure();
+}
+
+function closeAdventure() {
+  dom.adventureModal.classList.add("hidden");
+}
+
+function startExpedition(routeId) {
+  const route = routeById(routeId);
+  if (!route || state.expedition || accessibleDepth() < route.unlockDepth) return;
+  if (state.expeditionTickets < 1) {
+    showToast("探险券不足，每挖 12 个方块可以恢复 1 张。");
+    return;
+  }
+
+  state.expeditionTickets -= 1;
+  state.expedition = {
+    routeId,
+    step: 0,
+    hp: maxAdventureHealth(),
+    loot: defaultInventory(),
+    coins: 0,
+    xp: 0,
+    completed: false,
+    lastEvent: "小猫握紧矿灯，准备迈出第一步。",
+  };
+  logEvent(`探险队进入${route.name}，矿灯在黑暗中摇晃。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function chooseExpeditionMaterial(route) {
+  return route.materials[Math.floor(Math.random() * route.materials.length)];
+}
+
+function advanceExpedition() {
+  const expedition = state.expedition;
+  if (!expedition) return;
+  if (expedition.completed) {
+    finishExpedition(true);
+    return;
+  }
+
+  const route = routeById(expedition.routeId);
+  const roll = Math.random();
+  expedition.step += 1;
+  expedition.xp += 4 + route.danger * 2;
+
+  if (roll < 0.43) {
+    const type = chooseExpeditionMaterial(route);
+    const amount = Math.random() < 0.14 + state.perks.fortune * 0.04 ? 2 : 1;
+    expedition.loot[type] += amount;
+    expedition.lastEvent = `发现一处隐蔽矿脉，猫猫收进了 ${amount} 块${MATERIALS[type].name}。`;
+    playTone(type === "diamond" ? "diamond" : "break");
+  } else if (roll < 0.65) {
+    const coins = Math.round(randomBetween(9, 18) * route.danger * (1 + state.perks.lantern * 0.15));
+    expedition.coins += coins;
+    expedition.lastEvent = `矿灯照见旧木箱，里面藏着 ${coins} 枚金币。`;
+    playTone("coin");
+  } else if (roll < 0.83) {
+    const damage = randomBetween(1, route.danger);
+    expedition.hp = Math.max(0, expedition.hp - damage);
+    expedition.lastEvent = `碎石忽然坠落，猫猫躲闪不及，损失了 ${damage} 点体力。`;
+    playTone("error");
+  } else if (roll < 0.94) {
+    const oldHp = expedition.hp;
+    expedition.hp = Math.min(maxAdventureHealth(), expedition.hp + 1);
+    expedition.lastEvent = expedition.hp > oldHp
+      ? "发现安全的旧营地，猫猫休息片刻，恢复了 1 点体力。"
+      : "发现安全的旧营地，不过猫猫精神正好，继续前进。";
+    playTone("upgrade");
+  } else {
+    const type = route.materials[route.materials.length - 1];
+    const coins = Math.round(12 * route.danger * (1 + state.perks.lantern * 0.15));
+    expedition.loot[type] += 1;
+    expedition.coins += coins;
+    expedition.lastEvent = `矿灯闪出隐藏记号！猫猫找到 1 块${MATERIALS[type].name}和 ${coins} 枚金币。`;
+    playTone("diamond");
+  }
+
+  if (expedition.hp <= 0) {
+    failExpedition();
+    return;
+  }
+
+  if (expedition.step >= route.steps) {
+    const bonus = Math.round(route.clearBonus * (1 + state.perks.lantern * 0.15));
+    expedition.coins += bonus;
+    expedition.xp += route.clearXp;
+    expedition.completed = true;
+    expedition.lastEvent += ` 终点已抵达，额外发现 ${bonus} 枚金币。`;
+  }
+
+  renderAll();
+  saveGame();
+}
+
+function finishExpedition(completed) {
+  const expedition = state.expedition;
+  if (!expedition) return;
+
+  const route = routeById(expedition.routeId);
+  let overflowCoins = 0;
+  let stored = 0;
+
+  Object.entries(expedition.loot).forEach(([type, amount]) => {
+    const room = Math.max(0, BACKPACKS[state.backpackIndex].capacity - inventoryTotal());
+    const kept = Math.min(room, amount);
+    const overflow = amount - kept;
+    state.inventory[type] += kept;
+    stored += kept;
+    overflowCoins += overflow * MATERIALS[type].value;
+  });
+
+  const earnedCoins = expedition.coins + overflowCoins;
+  state.coins += earnedCoins;
+  addXp(expedition.xp);
+  state.bestExpedition = Math.max(state.bestExpedition, expedition.step);
+  state.expedition = null;
+  showToast(`${completed ? "探险完成" : "安全撤离"}：带回 ${stored} 块材料和 ${earnedCoins} 金币。`);
+  logEvent(overflowCoins > 0
+    ? `${route.name}战利品已结算，背包装不下的部分自动售出 ${overflowCoins} 金币。`
+    : `${route.name}战利品已安全带回主矿洞。`);
+  playTone(completed ? "upgrade" : "coin");
+  renderAll();
+  saveGame();
+}
+
+function failExpedition() {
+  const expedition = state.expedition;
+  const route = routeById(expedition.routeId);
+  addXp(Math.floor(expedition.xp / 2));
+  state.expedition = null;
+  showToast("体力归零，本轮临时战利品遗失。");
+  logEvent(`${route.name}发生险情，猫猫安全返回，但没能带回临时战利品。`);
+  playTone("error");
+  renderAll();
+  saveGame();
+}
+
+function retreatExpedition() {
+  if (!state.expedition) return;
+  if (state.expedition.completed) {
+    closeAdventure();
+    return;
+  }
+  finishExpedition(false);
+}
+
+function showToast(message) {
+  window.clearTimeout(toastTimer);
+  dom.toast.textContent = message;
+  dom.toast.classList.add("show");
+  toastTimer = window.setTimeout(() => dom.toast.classList.remove("show"), 2300);
+}
+
+function logEvent(message) {
+  dom.eventLog.textContent = message;
+}
+
+function playTone(type) {
+  if (!state.soundOn) return;
+
+  try {
+    audioContext ||= new AudioContext();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const tones = {
+      hit: [125, 0.045, "square"],
+      break: [190, 0.09, "square"],
+      diamond: [660, 0.18, "triangle"],
+      coin: [480, 0.15, "triangle"],
+      upgrade: [740, 0.2, "square"],
+      error: [88, 0.11, "sawtooth"],
+    };
+    const [frequency, duration, wave] = tones[type] || tones.hit;
+
+    oscillator.type = wave;
+    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(
+      Math.max(50, frequency * 1.18),
+      audioContext.currentTime + duration
+    );
+    gain.gain.setValueAtTime(0.045, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + duration);
+  } catch {
+    state.soundOn = false;
+    dom.soundToggle.classList.add("muted");
+  }
+}
+
+function toggleSound() {
+  state.soundOn = !state.soundOn;
+  dom.soundToggle.classList.toggle("muted", !state.soundOn);
+  showToast(state.soundOn ? "音效已开启。" : "音效已关闭。");
+  saveGame();
+}
+
+function resetGame() {
+  if (!window.confirm("确定要清空金币、背包和升级进度，重新开始吗？")) return;
+
+  state = initialState();
+  normalizePickaxeDurability();
+  state.tutorialSeen = true;
+  if (caveGame) {
+    caveGame.generateWorld();
+    caveGame.resetPosition();
+  }
+  renderAll();
+  saveGame();
+  showToast("矿洞已重置，新的旅程开始了。");
+  logEvent("猫猫矿工重新整理了装备，回到矿洞入口。");
+}
+
+dom.sellAll.addEventListener("click", sellInventory);
+dom.soundToggle.addEventListener("click", toggleSound);
+dom.resetGame.addEventListener("click", resetGame);
+
+dom.toolShop.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-buy-tool]");
+  if (button) buyTool(Number(button.dataset.buyTool));
+});
+
+dom.packShop.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-buy-pack]");
+  if (button) buyBackpack(Number(button.dataset.buyPack));
+});
+
+dom.swordShop.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-convert-sword]");
+  if (button) convertSword(Number(button.dataset.convertSword));
+});
+
+dom.armorShop.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-craft-armor]");
+  if (button) craftArmor(button.dataset.craftArmor);
+});
+
+dom.perkShop.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-buy-perk]");
+  if (button) buyPerk(button.dataset.buyPerk);
+});
+
+dom.villageAction.addEventListener("click", (event) => {
+  const repairButton = event.target.closest("[data-repair-building]");
+  if (repairButton) repairVillageBuilding(repairButton.dataset.repairBuilding);
+  const bossButton = event.target.closest("[data-summon-boss]");
+  if (bossButton) summonStoryBoss(bossButton.dataset.summonBoss);
+});
+
+dom.openAdventure.addEventListener("click", openAdventure);
+dom.closeAdventure.addEventListener("click", closeAdventure);
+dom.routeList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-start-route]");
+  if (button) startExpedition(button.dataset.startRoute);
+});
+dom.advanceExpedition.addEventListener("click", advanceExpedition);
+dom.retreatExpedition.addEventListener("click", retreatExpedition);
+
+dom.startGame.addEventListener("click", () => {
+  state.tutorialSeen = true;
+  dom.introModal.classList.add("hidden");
+  saveGame();
+  playTone("upgrade");
+});
+
+document.addEventListener("keydown", (event) => {
+  if (!dom.introModal.classList.contains("hidden")) return;
+  if (event.key.toLowerCase() === "s") sellInventory();
+  if (event.key.toLowerCase() === "m") toggleSound();
+});
+
+dom.introModal.classList.toggle("hidden", state.tutorialSeen);
+dom.soundToggle.classList.toggle("muted", !state.soundOn);
+renderAll();
+createCaveGame();
+saveGame();
