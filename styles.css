@@ -82,6 +82,7 @@ button {
 }
 
 .topbar,
+.rule-briefing,
 .panel,
 .mine-panel,
 .statusbar {
@@ -98,6 +99,88 @@ button {
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.04) 50%, transparent 50%) 0 0 / 8px 8px,
     #243b33;
+}
+
+.rule-briefing {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.05fr) minmax(440px, 1.8fr) minmax(210px, 0.8fr);
+  gap: 14px;
+  align-items: stretch;
+  margin-top: 14px;
+  padding: 14px 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.045) 25%, transparent 25%) 0 0 / 12px 12px,
+    #243b33;
+}
+
+.briefing-story p:not(.eyebrow),
+.briefing-priority small {
+  color: #bac9b9;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.briefing-story p:not(.eyebrow) {
+  margin-top: 7px;
+}
+
+.rule-loop {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rule-loop li,
+.briefing-priority {
+  padding: 9px;
+  border: 2px solid #14231e;
+  background: rgba(9, 17, 14, 0.32);
+}
+
+.rule-loop b,
+.rule-loop span,
+.rule-loop small,
+.briefing-priority span,
+.briefing-priority strong,
+.briefing-priority small {
+  display: block;
+}
+
+.rule-loop b {
+  color: var(--lime);
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
+.rule-loop span {
+  margin-top: 5px;
+  color: #fff0bd;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.rule-loop small {
+  margin-top: 5px;
+  color: #9fb1a4;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.briefing-priority span {
+  color: var(--gold);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.briefing-priority strong {
+  margin: 7px 0 5px;
+  color: #f3e7c4;
+  font-size: 10px;
+  line-height: 1.55;
 }
 
 .brand-lockup,
@@ -401,6 +484,31 @@ h3 {
   font-size: 15px;
 }
 
+.sell-one-button {
+  flex: 0 0 auto;
+  padding: 5px 6px;
+  cursor: pointer;
+  color: #f5e9c6;
+  font-size: 8px;
+  font-weight: 900;
+  border: 1px solid #627c42;
+  background: #405d4c;
+  box-shadow: 2px 2px #0c1511;
+}
+
+.sell-one-button:disabled {
+  cursor: not-allowed;
+  color: #788a80;
+  border-color: #2a3c35;
+  background: #31423d;
+  box-shadow: none;
+}
+
+.sell-one-button:not(:disabled):hover {
+  color: #233119;
+  background: var(--lime);
+}
+
 .mini-block {
   display: inline-block;
   flex: 0 0 auto;
@@ -437,6 +545,15 @@ h3 {
 .primary-button:active {
   transform: translate(3px, 3px);
   box-shadow: 1px 1px 0 #101a16;
+}
+
+.primary-button:disabled {
+  cursor: not-allowed;
+  color: #819087;
+  border-color: #293b34;
+  background: #40534b;
+  box-shadow: none;
+  filter: none;
 }
 
 .sell-button {
@@ -1358,6 +1475,11 @@ kbd {
   background: #7b673c;
 }
 
+.shop-item-icon.durability-icon {
+  color: #f5e4a3;
+  background: #63765f;
+}
+
 .workshop-section {
   padding-top: 13px;
   border-top: 2px dashed rgba(196, 222, 145, 0.22);
@@ -1881,6 +2003,14 @@ kbd {
 }
 
 @media (max-width: 1160px) {
+  .rule-briefing {
+    grid-template-columns: minmax(220px, 0.8fr) minmax(440px, 1.6fr);
+  }
+
+  .briefing-priority {
+    grid-column: 1 / -1;
+  }
+
   .game-layout {
     grid-template-columns: 224px minmax(470px, 1fr) 238px;
   }
@@ -1913,6 +2043,14 @@ kbd {
 
   .stat-chip {
     flex: 1;
+  }
+
+  .rule-briefing {
+    grid-template-columns: 1fr;
+  }
+
+  .briefing-priority {
+    grid-column: auto;
   }
 
   .game-layout {
@@ -1976,6 +2114,16 @@ kbd {
 
   .stat-chip strong {
     font-size: 12px;
+  }
+
+  .rule-briefing {
+    gap: 9px;
+    margin-top: 9px;
+    padding: 10px;
+  }
+
+  .rule-loop {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .game-layout {

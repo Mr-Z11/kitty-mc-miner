@@ -20,6 +20,14 @@ const TOOLS = [
   { name: "钻石镐", damage: 10, price: 1380, depth: 27 },
 ];
 
+const DURABILITY_UPGRADES = [
+  { name: "基础维护", bonus: 0, price: 0 },
+  { name: "铜制镐箍", bonus: 6, price: 48 },
+  { name: "铁木镐柄", bonus: 12, price: 150 },
+  { name: "黄金齿轮", bonus: 18, price: 390 },
+  { name: "钻石轴承", bonus: 24, price: 860 },
+];
+
 const SWORDS = [
   { name: "木剑", quality: "普通", qualityClass: "common", damage: 2, price: 0, color: "#b57a43" },
   { name: "石剑", quality: "优秀", qualityClass: "uncommon", damage: 4, price: 90, color: "#aab4ae" },
@@ -240,12 +248,14 @@ const defaultVillage = () => Object.fromEntries(
 );
 
 const initialState = () => ({
+  saveVersion: 2,
   coins: 0,
   depth: 1,
   mined: 0,
   streak: 0,
   lastMineAt: 0,
   toolIndex: 0,
+  durabilityLevel: 0,
   pickaxeDurability: null,
   shiftsStarted: 0,
   backpackIndex: 0,
@@ -267,6 +277,7 @@ const initialState = () => ({
 
 let state = loadGame();
 normalizeStoryState();
+normalizeDurabilityLevel();
 normalizePickaxeDurability();
 let audioContext;
 let toastTimer;
@@ -290,9 +301,11 @@ const dom = {
   sellValue: document.querySelector("#sellValue"),
   currentTool: document.querySelector("#currentTool"),
   toolDamage: document.querySelector("#toolDamage"),
+  maxDurability: document.querySelector("#maxDurability"),
   armorScore: document.querySelector("#armorScore"),
   equipmentGrid: document.querySelector("#equipmentGrid"),
   toolShop: document.querySelector("#toolShop"),
+  durabilityShop: document.querySelector("#durabilityShop"),
   packShop: document.querySelector("#packShop"),
   swordShop: document.querySelector("#swordShop"),
   armorShop: document.querySelector("#armorShop"),
@@ -345,6 +358,10 @@ function loadGame() {
     return {
       ...fresh,
       ...saved,
+      saveVersion: fresh.saveVersion,
+      durabilityLevel: (Number(saved.saveVersion) || 1) < 2
+        ? Number(saved.toolIndex) || 0
+        : saved.durabilityLevel,
       inventory: { ...fresh.inventory, ...saved.inventory },
       perks: { ...fresh.perks, ...saved.perks },
       equipment: { ...fresh.equipment, ...saved.equipment },
@@ -408,7 +425,7 @@ function missingRequirement(cost) {
 }
 
 function maxPickaxeDurability() {
-  return 18 + state.toolIndex * 6 + (isVillageBuilt("lampTower") ? 4 : 0) + (isVillageBuilt("lavaPump") ? 6 : 0);
+  return 18 + DURABILITY_UPGRADES[state.durabilityLevel].bonus + (isVillageBuilt("lampTower") ? 4 : 0) + (isVillageBuilt("lavaPump") ? 6 : 0);
 }
 
 function shiftSupplyCost() {
@@ -422,6 +439,13 @@ function normalizePickaxeDurability() {
     return;
   }
   state.pickaxeDurability = Math.max(0, Math.min(maxPickaxeDurability(), state.pickaxeDurability));
+}
+
+function normalizeDurabilityLevel() {
+  state.durabilityLevel = Math.max(
+    0,
+    Math.min(DURABILITY_UPGRADES.length - 1, Number(state.durabilityLevel) || 0)
+  );
 }
 
 function currentSword() {
@@ -535,7 +559,9 @@ function renderInventory() {
   dom.packCapacity.textContent = backpack.capacity;
   dom.packMeter.style.width = `${Math.min(100, percent)}%`;
   dom.packMeter.parentElement.classList.toggle("near-full", percent >= 80);
-  dom.sellValue.textContent = `+ ${inventoryValue().toLocaleString("zh-CN")} ¢`;
+  const totalValue = inventoryValue();
+  dom.sellValue.textContent = `+ ${totalValue.toLocaleString("zh-CN")} ¢`;
+  dom.sellAll.disabled = totalValue <= 0;
 
   dom.inventoryList.innerHTML = Object.entries(MATERIALS)
     .map(
@@ -544,6 +570,12 @@ function renderInventory() {
           <i class="mini-block type-${type}" aria-hidden="true"></i>
           <span>${material.name}</span>
           <strong>${state.inventory[type]}</strong>
+          <button
+            class="sell-one-button"
+            type="button"
+            data-sell-material="${type}"
+            ${state.inventory[type] <= 0 ? "disabled" : ""}
+          >卖出 1 个 · +${material.value}¢</button>
         </div>
       `
     )
@@ -552,6 +584,7 @@ function renderInventory() {
   const tool = TOOLS[state.toolIndex];
   dom.currentTool.textContent = tool.name;
   dom.toolDamage.textContent = tool.damage;
+  dom.maxDurability.textContent = maxPickaxeDurability();
   renderEquipment();
 }
 
@@ -624,10 +657,11 @@ function renderVillage() {
 
   const built = isVillageBuilt(chapter.building.id);
   if (!built) {
+    const missing = missingRequirement(chapter.building.cost);
     dom.villageAction.innerHTML = `
       <p>${formatRequirement(chapter.building.cost)}</p>
-      <button class="buy-button village-button" type="button" data-repair-building="${chapter.building.id}">
-        修复${chapter.building.name}
+      <button class="buy-button village-button" type="button" data-repair-building="${chapter.building.id}" ${missing ? "disabled" : ""}>
+        ${missing ? "材料不足" : `修复${chapter.building.name}`}
       </button>
     `;
     return;
@@ -649,6 +683,7 @@ function renderShop() {
       const owned = index <= state.toolIndex;
       const next = index === state.toolIndex + 1;
       const deepEnough = accessibleDepth() >= tool.depth;
+      const affordable = state.coins >= tool.price;
       const label = owned ? "已拥有" : next && deepEnough ? `${tool.price} ¢` : `深度 ${tool.depth}m`;
       return `
         <div class="shop-item">
@@ -661,18 +696,38 @@ function renderShop() {
             class="buy-button"
             type="button"
             data-buy-tool="${index}"
-            ${owned || !next || !deepEnough ? "disabled" : ""}
+            ${owned || !next || !deepEnough || !affordable ? "disabled" : ""}
           >${label}</button>
         </div>
       `;
     })
     .join("");
 
+  const durabilityUpgrade = DURABILITY_UPGRADES[state.durabilityLevel];
+  const nextDurabilityUpgrade = DURABILITY_UPGRADES[state.durabilityLevel + 1];
+  const durabilityAffordable = nextDurabilityUpgrade && state.coins >= nextDurabilityUpgrade.price;
+  dom.durabilityShop.innerHTML = `
+    <div class="shop-item">
+      <span class="shop-item-icon durability-icon" aria-hidden="true">↟</span>
+      <div class="shop-copy">
+        <strong>${durabilityUpgrade.name} <i>Lv.${state.durabilityLevel}</i></strong>
+        <small>耐久上限 ${maxPickaxeDurability()}${nextDurabilityUpgrade ? ` → ${maxPickaxeDurability() + nextDurabilityUpgrade.bonus - durabilityUpgrade.bonus}` : " · 已达顶级"}</small>
+      </div>
+      <button
+        class="buy-button"
+        type="button"
+        data-buy-durability="${state.durabilityLevel + 1}"
+        ${!nextDurabilityUpgrade || !durabilityAffordable ? "disabled" : ""}
+      >${nextDurabilityUpgrade ? `${nextDurabilityUpgrade.price} ¢` : "已满级"}</button>
+    </div>
+  `;
+
   dom.packShop.innerHTML = BACKPACKS.slice(1)
     .map((backpack, offset) => {
       const index = offset + 1;
       const owned = index <= state.backpackIndex;
       const next = index === state.backpackIndex + 1;
+      const affordable = state.coins >= backpack.price;
       return `
         <div class="shop-item">
           <span class="shop-item-icon pack-icon" aria-hidden="true">▣</span>
@@ -684,7 +739,7 @@ function renderShop() {
             class="buy-button"
             type="button"
             data-buy-pack="${index}"
-            ${owned || !next ? "disabled" : ""}
+            ${owned || !next || !affordable ? "disabled" : ""}
           >${owned ? "已拥有" : `${backpack.price} ¢`}</button>
         </div>
       `;
@@ -693,6 +748,7 @@ function renderShop() {
 
   const sword = currentSword();
   const nextSword = SWORDS[state.swordIndex + 1];
+  const swordAffordable = nextSword && state.coins >= nextSword.price;
   dom.swordShop.innerHTML = `
     <div class="shop-item">
       <span class="shop-item-icon perk-icon" aria-hidden="true">⚔</span>
@@ -704,7 +760,7 @@ function renderShop() {
         class="buy-button"
         type="button"
         data-convert-sword="${state.swordIndex + 1}"
-        ${nextSword ? "" : "disabled"}
+        ${!nextSword || !swordAffordable ? "disabled" : ""}
       >${nextSword ? `${nextSword.price} ¢` : "已满级"}</button>
     </div>
   `;
@@ -714,6 +770,7 @@ function renderShop() {
       const currentIndex = state.equipment[slotId];
       const currentTier = ARMOR_TIERS[currentIndex];
       const nextTier = ARMOR_TIERS[currentIndex + 1];
+      const price = nextTier ? armorPrice(slotId, currentIndex + 1) : null;
       return `
         <div class="shop-item">
           <span class="shop-item-icon pack-icon" aria-hidden="true">${slot.icon}</span>
@@ -725,8 +782,8 @@ function renderShop() {
             class="buy-button"
             type="button"
             data-craft-armor="${slotId}"
-            ${nextTier ? "" : "disabled"}
-          >${nextTier ? `${armorPrice(slotId, currentIndex + 1)} ¢` : "已满级"}</button>
+            ${!nextTier || state.coins < price ? "disabled" : ""}
+          >${nextTier ? `${price} ¢` : "已满级"}</button>
         </div>
       `;
     })
@@ -748,7 +805,7 @@ function renderShop() {
             class="buy-button"
             type="button"
             data-buy-perk="${perkId}"
-            ${maxed ? "disabled" : ""}
+            ${maxed || state.coins < price ? "disabled" : ""}
           >${maxed ? "已满级" : `${price} ¢`}</button>
         </div>
       `;
@@ -886,6 +943,19 @@ function sellInventory() {
   saveGame();
 }
 
+function sellMaterial(type) {
+  const material = MATERIALS[type];
+  if (!material || state.inventory[type] <= 0) return;
+
+  state.inventory[type] -= 1;
+  state.coins += material.value;
+  showToast(`卖出 1 个${material.name}，获得 ${material.value} 金币。`);
+  logEvent(`${material.name}单独售出，背包为主线材料留出了空间。`);
+  playTone("coin");
+  renderAll();
+  saveGame();
+}
+
 function buyTool(index) {
   const tool = TOOLS[index];
   if (!tool || index !== state.toolIndex + 1 || accessibleDepth() < tool.depth) return;
@@ -897,9 +967,26 @@ function buyTool(index) {
 
   state.coins -= tool.price;
   state.toolIndex = index;
-  state.pickaxeDurability = maxPickaxeDurability();
-  showToast(`装备成功：${tool.name}，挖掘力提升到 ${tool.damage}。`);
+  showToast(`装备成功：${tool.name}，挖掘力提升到 ${tool.damage}。当前耐久保持不变。`);
   logEvent(`商店送来了${tool.name}，坚硬矿层也能轻松处理。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function buyDurabilityUpgrade(index) {
+  const upgrade = DURABILITY_UPGRADES[index];
+  if (!upgrade || index !== state.durabilityLevel + 1) return;
+  if (state.coins < upgrade.price) {
+    showToast(`还差 ${upgrade.price - state.coins} 金币才能安装${upgrade.name}。`);
+    playTone("error");
+    return;
+  }
+
+  state.coins -= upgrade.price;
+  state.durabilityLevel = index;
+  showToast(`${upgrade.name}安装完成：耐久上限提升至 ${maxPickaxeDurability()}，当前耐久保持不变。`);
+  logEvent("耐久强化完成。按 Q 补给换班后，镐子会恢复至新的耐久上限。");
   playTone("upgrade");
   renderAll();
   saveGame();
@@ -1387,6 +1474,7 @@ function resetGame() {
   if (!window.confirm("确定要清空金币、背包和升级进度，重新开始吗？")) return;
 
   state = initialState();
+  normalizeDurabilityLevel();
   normalizePickaxeDurability();
   state.tutorialSeen = true;
   if (caveGame) {
@@ -1400,12 +1488,21 @@ function resetGame() {
 }
 
 dom.sellAll.addEventListener("click", sellInventory);
+dom.inventoryList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-sell-material]");
+  if (button) sellMaterial(button.dataset.sellMaterial);
+});
 dom.soundToggle.addEventListener("click", toggleSound);
 dom.resetGame.addEventListener("click", resetGame);
 
 dom.toolShop.addEventListener("click", (event) => {
   const button = event.target.closest("[data-buy-tool]");
   if (button) buyTool(Number(button.dataset.buyTool));
+});
+
+dom.durabilityShop.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-buy-durability]");
+  if (button) buyDurabilityUpgrade(Number(button.dataset.buyDurability));
 });
 
 dom.packShop.addEventListener("click", (event) => {

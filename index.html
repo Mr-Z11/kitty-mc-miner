@@ -62,6 +62,25 @@
         </div>
       </header>
 
+      <section class="rule-briefing" aria-labelledby="ruleBriefingTitle">
+        <div class="briefing-story">
+          <p class="eyebrow">MINER'S FIRST ORDERS</p>
+          <h2 id="ruleBriefingTitle">矿灯任务简报</h2>
+          <p>村庄的地心矿灯已经熄灭。操控小猫下矿、带回资源、修复工程，再用升级后的剑与护甲击败区域 Boss，逐层夺回通往地心的道路。</p>
+        </div>
+        <ol class="rule-loop" aria-label="核心游戏循环">
+          <li><b>01</b><span>边走边挖</span><small>方向键移动，E 挖矿</small></li>
+          <li><b>02</b><span>管理背包</span><small>单卖资源或 S 全部出售</small></li>
+          <li><b>03</b><span>分线升级</span><small>镐力、耐久、装备各自强化</small></li>
+          <li><b>04</b><span>推进主线</span><small>修村庄，打 Boss，开新矿层</small></li>
+        </ol>
+        <div class="briefing-priority">
+          <span>推荐优先级</span>
+          <strong>主线材料 → 镐力与耐久 → 剑甲备战 → 区域 Boss</strong>
+          <small>镐子耗尽后按 Q 支付补给费，耐久才会恢复至当前上限。</small>
+        </div>
+      </section>
+
       <main class="game-layout">
         <aside class="panel inventory-panel">
           <div class="panel-heading">
@@ -95,6 +114,7 @@
               <small>当前工具</small>
               <h3 id="currentTool">木镐</h3>
               <p>每次造成 <b id="toolDamage">1</b> 点挖掘力</p>
+              <p>耐久上限 <b id="maxDurability">18</b>，仅补给时恢复</p>
             </div>
           </div>
 
@@ -217,9 +237,17 @@
           <section class="shop-section">
             <div class="section-title">
               <h3>镐子升级</h3>
-              <small>挖得更快</small>
+              <small>仅提升挖掘力</small>
             </div>
             <div class="shop-list" id="toolShop"></div>
+          </section>
+
+          <section class="shop-section">
+            <div class="section-title">
+              <h3>耐久维护</h3>
+              <small>独立提升上限</small>
+            </div>
+            <div class="shop-list" id="durabilityShop"></div>
           </section>
 
           <section class="shop-section">
