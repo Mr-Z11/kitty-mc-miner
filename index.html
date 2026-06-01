@@ -77,7 +77,7 @@
         <div class="briefing-priority">
           <span>推荐优先级</span>
           <strong>主线材料 → 镐力与耐久 → 剑甲备战 → 区域 Boss</strong>
-          <small>镐子耗尽后按 Q 支付补给费，耐久才会恢复至当前上限。</small>
+          <small>镐子耐久不足时，使用矿洞下方的金币修理补满耐久并刷新当前矿层。</small>
         </div>
       </section>
 
@@ -114,7 +114,7 @@
               <small>当前工具</small>
               <h3 id="currentTool">木镐</h3>
               <p>每次造成 <b id="toolDamage">1</b> 点挖掘力</p>
-              <p>耐久上限 <b id="maxDurability">18</b>，仅补给时恢复</p>
+              <p>耐久上限 <b id="maxDurability">18</b>，使用金币修理恢复</p>
             </div>
           </div>
 
@@ -198,7 +198,6 @@
               <span><kbd>↑</kbd><kbd>W</kbd><kbd>空格</kbd> 跳跃</span>
               <span><kbd>E</kbd> 挖矿</span>
               <span><kbd>F</kbd> 挥剑</span>
-              <span><kbd>Q</kbd> 补给换班</span>
             </div>
             <div class="mobile-controls" aria-label="矿洞触控操作">
               <button type="button" data-cave-control="left">←</button>
@@ -211,17 +210,27 @@
 
           <div class="mine-footer">
             <div>
-              <p><b>操控小猫探索矿洞</b>，方向键移动，按 <b>E</b> 挖矿。镐子耐久耗尽后按 <b>Q</b> 补给换班。</p>
+              <p><b>操控小猫探索矿洞</b>，方向键移动，按 <b>E</b> 挖矿。耐久不足时，使用金币修理补满镐子。</p>
               <div class="key-hints">
                 <span><kbd>S</kbd> 出售</span>
                 <span><kbd>M</kbd> 音效</span>
                 <span><kbd>R</kbd> 重置矿洞位置</span>
               </div>
             </div>
-            <button class="adventure-trigger" id="openAdventure" type="button">
-              <span class="adventure-trigger-icon">⚑</span>
-              <span><b>探险模式</b><small><i id="ticketCount">3</i> / 3 探险券</small></span>
-            </button>
+            <div class="mine-footer-actions">
+              <button class="repair-trigger" id="repairPickaxe" type="button">
+                <span class="repair-trigger-icon">⚒</span>
+                <span>
+                  <b>金币修理</b>
+                  <small>补满耐久 · <i id="repairPickaxeCost">12</i> ¢</small>
+                  <em id="repairPickaxeHint">镐子状态良好</em>
+                </span>
+              </button>
+              <button class="adventure-trigger" id="openAdventure" type="button">
+                <span class="adventure-trigger-icon">⚑</span>
+                <span><b>探险模式</b><small><i id="ticketCount">3</i> / 3 探险券</small></span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -299,7 +308,10 @@
       </footer>
     </div>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite">
+      <span>⚑ 矿洞事件</span>
+      <strong id="toastMessage"></strong>
+    </div>
 
     <div class="adventure-modal hidden" id="adventureModal" role="dialog" aria-modal="true" aria-labelledby="adventureTitle">
       <div class="adventure-card">

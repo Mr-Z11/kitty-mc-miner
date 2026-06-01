@@ -148,6 +148,16 @@ const STORY_CHAPTERS = [
   },
 ];
 
+const ABYSS_CONTRACT_MATERIALS = ["iron", "gold", "diamond"];
+
+const ABYSS_BOSSES = [
+  { name: "回声史莱姆", color: "#99bc56" },
+  { name: "晶刺蜘蛛", color: "#b27483" },
+  { name: "熔岩守望者", color: "#d97c47" },
+];
+
+const MAX_BEACON_RESONANCE = 12;
+
 const PERKS = {
   sharpness: {
     name: "锋利附魔",
@@ -248,7 +258,7 @@ const defaultVillage = () => Object.fromEntries(
 );
 
 const initialState = () => ({
-  saveVersion: 2,
+  saveVersion: 3,
   coins: 0,
   depth: 1,
   mined: 0,
@@ -271,12 +281,18 @@ const initialState = () => ({
   storyChapter: 0,
   village: defaultVillage(),
   defeatedBosses: [],
+  abyssContract: null,
+  abyssContractsCompleted: 0,
+  abyssBossesDefeated: 0,
+  abyssMarks: 0,
+  beaconResonance: 0,
   soundOn: true,
   tutorialSeen: false,
 });
 
 let state = loadGame();
 normalizeStoryState();
+normalizeAbyssState();
 normalizeDurabilityLevel();
 normalizePickaxeDurability();
 let audioContext;
@@ -315,6 +331,9 @@ const dom = {
   swordHud: document.querySelector("#swordHud"),
   caveArmor: document.querySelector("#caveArmor"),
   caveDurability: document.querySelector("#caveDurability"),
+  repairPickaxe: document.querySelector("#repairPickaxe"),
+  repairPickaxeCost: document.querySelector("#repairPickaxeCost"),
+  repairPickaxeHint: document.querySelector("#repairPickaxeHint"),
   bossHud: document.querySelector("#bossHud"),
   bossName: document.querySelector("#bossName"),
   bossMeter: document.querySelector("#bossMeter"),
@@ -329,6 +348,7 @@ const dom = {
   soundToggle: document.querySelector("#soundToggle"),
   resetGame: document.querySelector("#resetGame"),
   toast: document.querySelector("#toast"),
+  toastMessage: document.querySelector("#toastMessage"),
   introModal: document.querySelector("#introModal"),
   startGame: document.querySelector("#startGame"),
   openAdventure: document.querySelector("#openAdventure"),
@@ -395,8 +415,20 @@ function normalizeStoryState() {
   state.depth = Math.min(depth, activeStoryChapter()?.maxDepth ?? depth);
 }
 
+function normalizeAbyssState() {
+  state.abyssContractsCompleted = Math.max(0, Number(state.abyssContractsCompleted) || 0);
+  state.abyssBossesDefeated = Math.max(0, Number(state.abyssBossesDefeated) || 0);
+  state.abyssMarks = Math.max(0, Number(state.abyssMarks) || 0);
+  state.beaconResonance = Math.max(0, Math.min(MAX_BEACON_RESONANCE, Number(state.beaconResonance) || 0));
+  if (storyCompleted() && !state.abyssContract) state.abyssContract = createAbyssContract();
+}
+
 function activeStoryChapter() {
   return STORY_CHAPTERS[state.storyChapter] || null;
+}
+
+function storyCompleted() {
+  return state.storyChapter >= STORY_CHAPTERS.length;
 }
 
 function isVillageBuilt(buildingId) {
@@ -425,10 +457,14 @@ function missingRequirement(cost) {
 }
 
 function maxPickaxeDurability() {
-  return 18 + DURABILITY_UPGRADES[state.durabilityLevel].bonus + (isVillageBuilt("lampTower") ? 4 : 0) + (isVillageBuilt("lavaPump") ? 6 : 0);
+  return 18
+    + DURABILITY_UPGRADES[state.durabilityLevel].bonus
+    + (isVillageBuilt("lampTower") ? 4 : 0)
+    + (isVillageBuilt("lavaPump") ? 6 : 0)
+    + state.beaconResonance * 2;
 }
 
-function shiftSupplyCost() {
+function repairPickaxeCost() {
   const baseCost = 12 + state.toolIndex * 18;
   return Math.max(1, Math.round(baseCost * (isVillageBuilt("mineLift") ? 0.85 : 1)));
 }
@@ -501,6 +537,49 @@ function randomBetween(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function createAbyssContract() {
+  const tier = state.abyssContractsCompleted + 1;
+  const material = ABYSS_CONTRACT_MATERIALS[Math.floor(Math.random() * ABYSS_CONTRACT_MATERIALS.length)];
+  const baseAmounts = { iron: 12, gold: 9, diamond: 5 };
+  return {
+    id: `abyss-contract-${tier}-${Date.now()}`,
+    tier,
+    material,
+    amount: baseAmounts[material] + Math.floor((tier - 1) * 1.5),
+    targetDepth: Math.max(42 + tier * 3, state.depth + randomBetween(2, 4)),
+    rewardCoins: 180 + tier * 70,
+    rewardXp: 48 + tier * 16,
+    rewardMarks: 1 + Math.floor((tier - 1) / 3),
+  };
+}
+
+function ensureAbyssContract() {
+  state.abyssContract ||= createAbyssContract();
+  return state.abyssContract;
+}
+
+function abyssContractRerollCost() {
+  return 60 + state.abyssContractsCompleted * 15;
+}
+
+function abyssBossForLevel(level = state.abyssBossesDefeated + 1) {
+  const template = ABYSS_BOSSES[(level - 1) % ABYSS_BOSSES.length];
+  return {
+    id: `abyss-boss-${level}`,
+    name: `${template.name} Lv.${level}`,
+    color: template.color,
+    hp: 210 + level * 58,
+    damage: Math.min(13, 5 + Math.floor(level / 2)),
+    reward: 180 + level * 95,
+    xp: 56 + level * 24,
+    marks: 1 + Math.floor((level - 1) / 4),
+  };
+}
+
+function beaconResonanceCost() {
+  return 2 + state.beaconResonance;
+}
+
 function addMiningTicket() {
   const milestone = Math.floor(state.mined / TICKET_MINE_INTERVAL);
   if (milestone <= state.ticketMilestone) return;
@@ -523,6 +602,7 @@ function renderAll() {
   renderInventory();
   renderShop();
   renderVillage();
+  renderRepairStation();
   renderObjective();
   renderAdventure();
   renderCaveHud();
@@ -624,6 +704,19 @@ function renderCaveHud(status) {
   if (caveStatus?.hint) dom.caveHint.textContent = caveStatus.hint;
 }
 
+function renderRepairStation() {
+  const cost = repairPickaxeCost();
+  const full = state.pickaxeDurability >= maxPickaxeDurability();
+  dom.repairPickaxeCost.textContent = cost;
+  dom.repairPickaxe.disabled = full;
+  dom.repairPickaxe.classList.toggle("needs-repair", !full);
+  dom.repairPickaxeHint.textContent = full
+    ? "镐子状态良好"
+    : state.coins < cost
+      ? `还差 ${cost - state.coins} 金币`
+      : "补满耐久并刷新矿层";
+}
+
 function renderVillage() {
   const chapter = activeStoryChapter();
   const completed = !chapter;
@@ -651,7 +744,50 @@ function renderVillage() {
   }).join("");
 
   if (completed) {
-    dom.villageAction.innerHTML = '<p class="village-ending">信标已经点亮。继续深入矿井，收集钻石并完善村庄装备。</p>';
+    const contract = ensureAbyssContract();
+    const material = MATERIALS[contract.material];
+    const depthReady = state.depth >= contract.targetDepth;
+    const materialReady = state.inventory[contract.material] >= contract.amount;
+    const rerollCost = abyssContractRerollCost();
+    const boss = abyssBossForLevel();
+    const bossActive = caveGame?.hasActiveBoss();
+    const resonanceCost = beaconResonanceCost();
+    const resonanceMaxed = state.beaconResonance >= MAX_BEACON_RESONANCE;
+    dom.villageAction.innerHTML = `
+      <div class="abyss-summary">
+        <strong>深渊记录</strong>
+        <span>委托 ${state.abyssContractsCompleted}</span>
+        <span>首领 ${state.abyssBossesDefeated}</span>
+        <span>徽记 ${state.abyssMarks}</span>
+      </div>
+      <article class="abyss-card">
+        <small>ABYSS ORDER · TIER ${contract.tier}</small>
+        <strong>深渊物资委托</strong>
+        <p class="${depthReady ? "done" : ""}">下潜至 ${contract.targetDepth}m ${depthReady ? "✓" : `· 当前 ${state.depth}m`}</p>
+        <p class="${materialReady ? "done" : ""}">交付${material.name} × ${contract.amount} ${materialReady ? "✓" : `· 当前 ${state.inventory[contract.material]}`}</p>
+        <em>奖励 ${contract.rewardCoins} 金币 · ${contract.rewardXp} 经验 · ${contract.rewardMarks} 徽记 · 1 探险券</em>
+        <div class="abyss-actions">
+          <button class="buy-button" type="button" data-complete-abyss-contract ${!depthReady || !materialReady ? "disabled" : ""}>提交委托</button>
+          <button class="buy-button reroll-button" type="button" data-reroll-abyss-contract>换一批 · ${rerollCost}¢</button>
+        </div>
+      </article>
+      <article class="abyss-card boss-contract">
+        <small>ENDLESS BOSS · NEXT ${state.abyssBossesDefeated + 1}</small>
+        <strong>${boss.name}</strong>
+        <p>生命 ${boss.hp} · 攻击 ${boss.damage} · 击败后获得 ${boss.marks} 徽记</p>
+        <button class="buy-button boss-button" type="button" data-summon-abyss-boss="${boss.id}" ${bossActive ? "disabled" : ""}>
+          ${bossActive ? "Boss 已进入矿洞" : "召唤深渊首领"}
+        </button>
+      </article>
+      <article class="abyss-card resonance-card">
+        <small>BEACON RESONANCE</small>
+        <strong>信标共鸣 Lv.${state.beaconResonance}</strong>
+        <p>永久耐久 +${state.beaconResonance * 2}${resonanceMaxed ? " · 已达顶级" : ` → +${(state.beaconResonance + 1) * 2}`}</p>
+        <button class="buy-button" type="button" data-upgrade-beacon ${resonanceMaxed || state.abyssMarks < resonanceCost ? "disabled" : ""}>
+          ${resonanceMaxed ? "已满级" : `${resonanceCost} 徽记`}
+        </button>
+      </article>
+    `;
     return;
   }
 
@@ -897,7 +1033,7 @@ function renderObjective() {
   const nextPack = BACKPACKS[state.backpackIndex + 1];
 
   if (state.pickaxeDurability <= 0) {
-    dom.currentObjective.textContent = `镐子耐久耗尽：按 Q 支付 ${shiftSupplyCost()} 金币补给换班`;
+    dom.currentObjective.textContent = `镐子耐久耗尽：点击矿洞下方“金币修理”，支付 ${repairPickaxeCost()} 金币补满耐久`;
     return;
   }
 
@@ -908,6 +1044,21 @@ function renderObjective() {
 
   if (chapter) {
     dom.currentObjective.textContent = `主线：召唤并击败${chapter.boss.name}，解锁${chapter.unlock}`;
+    return;
+  }
+
+  if (storyCompleted()) {
+    const contract = ensureAbyssContract();
+    const material = MATERIALS[contract.material];
+    if (state.depth < contract.targetDepth) {
+      dom.currentObjective.textContent = `深渊委托 Tier ${contract.tier}：继续下潜至 ${contract.targetDepth}m`;
+      return;
+    }
+    if (state.inventory[contract.material] < contract.amount) {
+      dom.currentObjective.textContent = `深渊委托 Tier ${contract.tier}：收集${material.name} ${state.inventory[contract.material]} / ${contract.amount}`;
+      return;
+    }
+    dom.currentObjective.textContent = `深渊委托 Tier ${contract.tier} 已完成：返回猫猫村庄提交物资`;
     return;
   }
 
@@ -986,7 +1137,7 @@ function buyDurabilityUpgrade(index) {
   state.coins -= upgrade.price;
   state.durabilityLevel = index;
   showToast(`${upgrade.name}安装完成：耐久上限提升至 ${maxPickaxeDurability()}，当前耐久保持不变。`);
-  logEvent("耐久强化完成。按 Q 补给换班后，镐子会恢复至新的耐久上限。");
+  logEvent("耐久强化完成。下次使用金币修理时，镐子会恢复至新的耐久上限。");
   playTone("upgrade");
   renderAll();
   saveGame();
@@ -1099,11 +1250,16 @@ function descendCaveLayer() {
   return { advanced: true, depth: state.depth, zone: zone.name };
 }
 
-function startNewMiningShift() {
-  const cost = shiftSupplyCost();
+function repairPickaxe() {
+  const cost = repairPickaxeCost();
+  if (state.pickaxeDurability >= maxPickaxeDurability()) {
+    showToast("镐子耐久已经是满的。");
+    return;
+  }
+
   if (state.coins < cost) {
-    showToast(`补给费需要 ${cost} 金币，还差 ${cost - state.coins} 金币。先出售背包里的矿物。`);
-    logEvent("补给站暂未放行：先出售本班次采集的矿物，再开启新矿井。");
+    showToast(`修理需要 ${cost} 金币，还差 ${cost - state.coins} 金币。先出售背包里的矿物。`);
+    logEvent("修理站暂未开工：先出售采集的矿物，再补满镐子耐久。");
     playTone("error");
     return;
   }
@@ -1115,18 +1271,18 @@ function startNewMiningShift() {
     caveGame.generateWorld();
     caveGame.resetPosition();
   }
-  showToast(`补给完成：支付 ${cost} 金币，新的矿井班次已开启。`);
-  logEvent(`第 ${state.shiftsStarted + 1} 班矿井开始，镐子已修复并换上新的矿灯。`);
+  showToast(`金币修理完成：支付 ${cost} 金币，镐子耐久已补满。`);
+  logEvent(`修理站完成第 ${state.shiftsStarted} 次维护，当前矿层也重新整理完毕。`);
   playTone("upgrade");
   renderAll();
   saveGame();
 }
 
-function defeatCaveEnemy({ id, isBoss, name, coins, xp }) {
+function defeatCaveEnemy({ id, isBoss, name, coins, xp, marks = 0 }) {
   state.coins += coins;
   addXp(xp);
   if (isBoss) {
-    completeStoryBoss(id);
+    if (!completeStoryBoss(id)) completeAbyssBoss(id, marks);
   } else {
     showToast(`击败${name}，获得 ${coins} 金币。`);
     logEvent(`${name}被击败，剑的品质正在改变矿洞里的生存方式。`);
@@ -1181,11 +1337,12 @@ function summonStoryBoss(bossId) {
 
 function completeStoryBoss(bossId) {
   const chapter = activeStoryChapter();
-  if (!chapter || chapter.boss.id !== bossId) return;
+  if (!chapter || chapter.boss.id !== bossId) return false;
 
   state.defeatedBosses.push(bossId);
   state.storyChapter += 1;
   const nextChapter = activeStoryChapter();
+  if (!nextChapter) ensureAbyssContract();
   showToast(nextChapter
     ? `区域净化完成：${chapter.unlock}已经开放！`
     : "地心矿灯重新亮起，主线完成！自由深渊模式已开放。"
@@ -1194,6 +1351,98 @@ function completeStoryBoss(bossId) {
     ? `${chapter.boss.name}倒下了。${chapter.unlock}的道路已经打开，村庄等待下一项修复工程。`
     : "黑暗晶体巨像崩解，地心信标照亮了猫猫村庄。新的深渊挑战仍在地下等待。"
   );
+  return true;
+}
+
+function completeAbyssBoss(bossId, marks) {
+  const boss = abyssBossForLevel();
+  if (boss.id !== bossId) return false;
+
+  state.abyssBossesDefeated += 1;
+  state.abyssMarks += marks;
+  showToast(`击败${boss.name}：获得 ${boss.reward} 金币和 ${marks} 枚深渊徽记。`);
+  logEvent(`${boss.name}已经净化。信标记录了新的首领层级，下一只深渊首领会更强。`);
+  return true;
+}
+
+function completeAbyssContract() {
+  if (!storyCompleted()) return;
+  const contract = ensureAbyssContract();
+  if (state.depth < contract.targetDepth) {
+    showToast(`还需要继续下潜至 ${contract.targetDepth}m。`);
+    playTone("error");
+    return;
+  }
+  if (state.inventory[contract.material] < contract.amount) {
+    showToast(`还缺 ${contract.amount - state.inventory[contract.material]} 块${MATERIALS[contract.material].name}。`);
+    playTone("error");
+    return;
+  }
+
+  state.inventory[contract.material] -= contract.amount;
+  state.coins += contract.rewardCoins;
+  state.abyssMarks += contract.rewardMarks;
+  state.expeditionTickets = Math.min(MAX_TICKETS, state.expeditionTickets + 1);
+  addXp(contract.rewardXp);
+  state.abyssContractsCompleted += 1;
+  state.abyssContract = createAbyssContract();
+  showToast(`委托完成：获得 ${contract.rewardCoins} 金币和 ${contract.rewardMarks} 枚深渊徽记。`);
+  logEvent(`深渊委托 Tier ${contract.tier} 已交付。新的物资单已经送到信标旁。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function rerollAbyssContract() {
+  if (!storyCompleted()) return;
+  const cost = abyssContractRerollCost();
+  if (state.coins < cost) {
+    showToast(`更换委托需要 ${cost} 金币，还差 ${cost - state.coins} 金币。`);
+    playTone("error");
+    return;
+  }
+
+  state.coins -= cost;
+  state.abyssContract = createAbyssContract();
+  showToast(`已支付 ${cost} 金币，信标换来了一批新的深渊物资单。`);
+  logEvent("深渊委托已经刷新，新的下潜目标和交付材料已写入记录。");
+  playTone("coin");
+  renderAll();
+  saveGame();
+}
+
+function summonAbyssBoss(bossId) {
+  if (!storyCompleted()) return;
+  const boss = abyssBossForLevel();
+  if (boss.id !== bossId) return;
+  if (!caveGame || caveGame.hasActiveBoss()) {
+    showToast("已有 Boss 进入矿洞。");
+    return;
+  }
+
+  caveGame.spawnBoss(boss);
+  showToast(`${boss.name}回应信标，进入矿洞！`);
+  logEvent(`深渊警报：${boss.name}出现。击败它可以获得信标共鸣需要的徽记。`);
+  playTone("error");
+  renderAll();
+}
+
+function upgradeBeaconResonance() {
+  if (!storyCompleted() || state.beaconResonance >= MAX_BEACON_RESONANCE) return;
+  const cost = beaconResonanceCost();
+  if (state.abyssMarks < cost) {
+    showToast(`还差 ${cost - state.abyssMarks} 枚深渊徽记。`);
+    playTone("error");
+    return;
+  }
+
+  state.abyssMarks -= cost;
+  state.beaconResonance += 1;
+  showToast(`信标共鸣提升至 Lv.${state.beaconResonance}，镐耐久上限永久 +2。`);
+  logEvent("地心信标吸收了深渊徽记，修理站现在能维护更耐用的镐子。");
+  playTone("upgrade");
+  renderAll();
+  saveGame();
 }
 
 function handleCaveDeath() {
@@ -1227,7 +1476,7 @@ function createCaveGame() {
         swordDamage: sword.damage,
         swordName: sword.name,
         swordQuality: sword.quality,
-        shiftCost: shiftSupplyCost(),
+        repairCost: repairPickaxeCost(),
         toolDamage: TOOLS[state.toolIndex].damage,
       };
     },
@@ -1238,7 +1487,6 @@ function createCaveGame() {
     },
     onMine: collectCaveMaterial,
     onPlayerDeath: handleCaveDeath,
-    onStartShift: startNewMiningShift,
     onStatus: updateCaveStatus,
   });
   window.caveGame = caveGame;
@@ -1419,9 +1667,9 @@ function retreatExpedition() {
 
 function showToast(message) {
   window.clearTimeout(toastTimer);
-  dom.toast.textContent = message;
+  dom.toastMessage.textContent = message;
   dom.toast.classList.add("show");
-  toastTimer = window.setTimeout(() => dom.toast.classList.remove("show"), 2300);
+  toastTimer = window.setTimeout(() => dom.toast.classList.remove("show"), 3600);
 }
 
 function logEvent(message) {
@@ -1488,6 +1736,7 @@ function resetGame() {
 }
 
 dom.sellAll.addEventListener("click", sellInventory);
+dom.repairPickaxe.addEventListener("click", repairPickaxe);
 dom.inventoryList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-sell-material]");
   if (button) sellMaterial(button.dataset.sellMaterial);
@@ -1530,6 +1779,14 @@ dom.villageAction.addEventListener("click", (event) => {
   if (repairButton) repairVillageBuilding(repairButton.dataset.repairBuilding);
   const bossButton = event.target.closest("[data-summon-boss]");
   if (bossButton) summonStoryBoss(bossButton.dataset.summonBoss);
+  const contractButton = event.target.closest("[data-complete-abyss-contract]");
+  if (contractButton) completeAbyssContract();
+  const rerollButton = event.target.closest("[data-reroll-abyss-contract]");
+  if (rerollButton) rerollAbyssContract();
+  const abyssBossButton = event.target.closest("[data-summon-abyss-boss]");
+  if (abyssBossButton) summonAbyssBoss(abyssBossButton.dataset.summonAbyssBoss);
+  const beaconButton = event.target.closest("[data-upgrade-beacon]");
+  if (beaconButton) upgradeBeaconResonance();
 });
 
 dom.openAdventure.addEventListener("click", openAdventure);

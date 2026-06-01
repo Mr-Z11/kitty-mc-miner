@@ -106,7 +106,6 @@
         }
         if (key === "e") this.mine(this.miningDirectionFromKeys());
         if (key === "f") this.attack();
-        if (key === "q" && this.options.onStartShift) this.options.onStartShift();
         if (key === "r") this.resetPosition();
       });
 
@@ -412,7 +411,7 @@
       this.player.nextMineAt = now + 130;
       const config = this.getConfig();
       if ((config.durability ?? 1) <= 0) {
-        this.setHint(`镐子耐久耗尽，按 Q 支付 ${config.shiftCost || 0} 金币补给并开启新班次。`);
+        this.setHint(`镐子耐久耗尽，点击矿洞下方“金币修理”，支付 ${config.repairCost || 0} 金币补满耐久。`);
         return;
       }
       const vector = this.miningVector(direction);
@@ -440,7 +439,7 @@
         const result = this.options.onMine ? this.options.onMine({ type: block.type, critical }) : {};
         this.addFloatingText(block.x, block.y - 5, `+${result.amount || 1} ${result.name || block.type}`, "#f7e6aa");
         if (result.durability <= 0) {
-          this.setHint(`镐子耐久耗尽，按 Q 支付 ${config.shiftCost || 0} 金币补给并开启新班次。`);
+          this.setHint(`镐子耐久耗尽，点击矿洞下方“金币修理”，支付 ${config.repairCost || 0} 金币补满耐久。`);
         }
       }
     }
@@ -483,6 +482,7 @@
             name: enemy.name,
             coins: enemy.reward,
             xp: enemy.xp,
+            marks: enemy.marks || 0,
           });
         }
       }
@@ -544,7 +544,7 @@
       const activeBoss = this.enemies.find((enemy) => enemy.isBoss && !enemy.dead);
       let hint = "方向键或 A、D 移动，W、↑ 或空格跳跃，按 E 挖矿。";
       if (nearestBlock) hint = `附近：${config.materialNames?.[nearestBlock.type] || nearestBlock.type}，按 E 挖掘；按住方向再按 E 可定向挖。`;
-      if ((config.durability ?? 1) <= 0) hint = `镐子耐久耗尽，按 Q 支付 ${config.shiftCost || 0} 金币补给并开启新班次。`;
+      if ((config.durability ?? 1) <= 0) hint = `镐子耐久耗尽，点击矿洞下方“金币修理”，支付 ${config.repairCost || 0} 金币补满耐久。`;
       if (nearestEnemy) hint = `${nearestEnemy.name}靠近了！按 F 使用${config.swordName || "剑"}。`;
       this.canvas.dataset.playerX = String(Math.round(this.player.x));
       this.canvas.dataset.playerY = String(Math.round(this.player.y));
