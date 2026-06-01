@@ -382,6 +382,125 @@ h3 {
   text-decoration: line-through;
 }
 
+.audio-control {
+  position: relative;
+}
+
+.audio-settings {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  z-index: 25;
+  width: 266px;
+  padding: 12px;
+  color: #dce4cf;
+  border: 3px solid #0a130f;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%) 0 0 / 10px 10px,
+    #2b433a;
+  box-shadow: 5px 5px 0 #0a120f;
+}
+
+.audio-settings[hidden] {
+  display: none;
+}
+
+.audio-settings header,
+.audio-setting-row,
+.audio-volume span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.audio-settings header {
+  padding-bottom: 8px;
+  border-bottom: 2px solid rgba(7, 15, 12, 0.5);
+}
+
+.audio-settings h3 {
+  color: #fff0bd;
+  font-size: 15px;
+}
+
+.audio-close {
+  width: 25px;
+  height: 25px;
+  cursor: pointer;
+  color: #e7e6cf;
+  font-weight: 900;
+  border: 1px solid #111e19;
+  background: #405b51;
+}
+
+.audio-close:hover {
+  color: var(--lime);
+  background: #4d6a5f;
+}
+
+.audio-status {
+  margin: 8px 0;
+  padding: 6px;
+  color: #e9cf83;
+  font-size: 8px;
+  border: 1px dashed rgba(255, 202, 84, 0.4);
+  background: rgba(12, 22, 18, 0.32);
+}
+
+.audio-setting-row {
+  margin-top: 8px;
+  color: #e3e0c7;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.audio-switch {
+  min-width: 45px;
+  padding: 4px 5px;
+  cursor: pointer;
+  color: #a7b3aa;
+  font-size: 8px;
+  font-weight: 900;
+  border: 1px solid #263b33;
+  background: #3a5049;
+  box-shadow: 2px 2px #0d1814;
+}
+
+.audio-switch.active {
+  color: #203018;
+  border-color: #60782f;
+  background: var(--lime);
+}
+
+.audio-volume {
+  display: block;
+  margin-top: 7px;
+  color: #aebfb2;
+  font-size: 8px;
+}
+
+.audio-volume b {
+  color: #ffe08a;
+  font-size: 8px;
+}
+
+.audio-volume input {
+  width: 100%;
+  height: 5px;
+  margin-top: 8px;
+  cursor: pointer;
+  accent-color: var(--gold);
+}
+
+.audio-settings > small {
+  display: block;
+  margin-top: 10px;
+  color: #95aa9d;
+  font-size: 8px;
+  line-height: 1.6;
+}
+
 .game-layout {
   display: grid;
   grid-template-columns: 254px minmax(520px, 1fr) 272px;
@@ -2282,6 +2401,10 @@ kbd {
   .topbar {
     min-height: auto;
     padding: 10px;
+  }
+
+  .audio-settings {
+    width: min(266px, calc(100vw - 28px));
   }
 
   .brand-cube {

@@ -158,6 +158,70 @@ const ABYSS_BOSSES = [
 
 const MAX_BEACON_RESONANCE = 12;
 
+const SOUND_EFFECTS = {
+  hit: [
+    { frequency: 125, duration: 0.08, wave: "square", volume: 0.08, slide: 0.72 },
+  ],
+  break: [
+    { frequency: 210, duration: 0.09, wave: "square", volume: 0.07, slide: 0.62 },
+    { frequency: 118, duration: 0.08, wave: "square", volume: 0.045, delay: 0.045, slide: 0.74 },
+  ],
+  diamond: [
+    { frequency: 660, duration: 0.16, wave: "triangle", volume: 0.075, slide: 1.22 },
+    { frequency: 990, duration: 0.19, wave: "square", volume: 0.038, delay: 0.07, slide: 1.08 },
+  ],
+  coin: [
+    { frequency: 480, duration: 0.1, wave: "square", volume: 0.055, slide: 1.05 },
+    { frequency: 720, duration: 0.13, wave: "triangle", volume: 0.06, delay: 0.065, slide: 1.08 },
+  ],
+  upgrade: [
+    { frequency: 392, duration: 0.13, wave: "square", volume: 0.05 },
+    { frequency: 523.25, duration: 0.14, wave: "square", volume: 0.052, delay: 0.075 },
+    { frequency: 783.99, duration: 0.2, wave: "triangle", volume: 0.072, delay: 0.16, slide: 1.06 },
+  ],
+  error: [
+    { frequency: 155, duration: 0.14, wave: "sawtooth", volume: 0.06, slide: 0.58 },
+    { frequency: 92, duration: 0.17, wave: "square", volume: 0.045, delay: 0.09, slide: 0.74 },
+  ],
+};
+
+const MUSIC_STEP_MS = 280;
+
+const MUSIC_PATTERN = [
+  { bass: 130.81, melody: 523.25 },
+  { bass: null, melody: null },
+  { bass: 130.81, melody: 659.25 },
+  { bass: null, melody: 587.33 },
+  { bass: 110, melody: 523.25 },
+  { bass: null, melody: null },
+  { bass: 110, melody: 440 },
+  { bass: null, melody: 493.88 },
+  { bass: 98, melody: 392 },
+  { bass: null, melody: null },
+  { bass: 98, melody: 493.88 },
+  { bass: null, melody: 523.25 },
+  { bass: 110, melody: 440 },
+  { bass: null, melody: null },
+  { bass: 110, melody: 392 },
+  { bass: null, melody: 329.63 },
+  { bass: 130.81, melody: 523.25 },
+  { bass: null, melody: null },
+  { bass: 130.81, melody: 659.25 },
+  { bass: null, melody: 783.99 },
+  { bass: 146.83, melody: 698.46 },
+  { bass: null, melody: null },
+  { bass: 146.83, melody: 587.33 },
+  { bass: null, melody: 659.25 },
+  { bass: 110, melody: 523.25 },
+  { bass: null, melody: null },
+  { bass: 110, melody: 440 },
+  { bass: null, melody: 493.88 },
+  { bass: 98, melody: 392 },
+  { bass: null, melody: null },
+  { bass: 98, melody: 329.63 },
+  { bass: null, melody: null },
+];
+
 const PERKS = {
   sharpness: {
     name: "锋利附魔",
@@ -258,7 +322,7 @@ const defaultVillage = () => Object.fromEntries(
 );
 
 const initialState = () => ({
-  saveVersion: 3,
+  saveVersion: 4,
   coins: 0,
   depth: 1,
   mined: 0,
@@ -287,6 +351,10 @@ const initialState = () => ({
   abyssMarks: 0,
   beaconResonance: 0,
   soundOn: true,
+  musicOn: true,
+  audioMuted: false,
+  soundVolume: 55,
+  musicVolume: 25,
   tutorialSeen: false,
 });
 
@@ -295,7 +363,14 @@ normalizeStoryState();
 normalizeAbyssState();
 normalizeDurabilityLevel();
 normalizePickaxeDurability();
+normalizeAudioState();
 let audioContext;
+let soundBus;
+let musicBus;
+let musicTimer;
+let musicStep = 0;
+let audioUnlocked = false;
+let audioPanelOpen = false;
 let toastTimer;
 let caveGame;
 
@@ -345,7 +420,16 @@ const dom = {
   villageAction: document.querySelector("#villageAction"),
   currentObjective: document.querySelector("#currentObjective"),
   eventLog: document.querySelector("#eventLog"),
+  audioSettingsToggle: document.querySelector("#audioSettingsToggle"),
+  audioSettings: document.querySelector("#audioSettings"),
+  closeAudioSettings: document.querySelector("#closeAudioSettings"),
+  audioStatus: document.querySelector("#audioStatus"),
   soundToggle: document.querySelector("#soundToggle"),
+  soundVolume: document.querySelector("#soundVolume"),
+  soundVolumeLabel: document.querySelector("#soundVolumeLabel"),
+  musicToggle: document.querySelector("#musicToggle"),
+  musicVolume: document.querySelector("#musicVolume"),
+  musicVolumeLabel: document.querySelector("#musicVolumeLabel"),
   resetGame: document.querySelector("#resetGame"),
   toast: document.querySelector("#toast"),
   toastMessage: document.querySelector("#toastMessage"),
@@ -482,6 +566,14 @@ function normalizeDurabilityLevel() {
     0,
     Math.min(DURABILITY_UPGRADES.length - 1, Number(state.durabilityLevel) || 0)
   );
+}
+
+function normalizeAudioState() {
+  state.soundOn = state.soundOn !== false;
+  state.musicOn = state.musicOn !== false;
+  state.audioMuted = Boolean(state.audioMuted);
+  state.soundVolume = Math.max(0, Math.min(100, Number(state.soundVolume) || 0));
+  state.musicVolume = Math.max(0, Math.min(100, Number(state.musicVolume) || 0));
 }
 
 function currentSword() {
@@ -1676,45 +1768,199 @@ function logEvent(message) {
   dom.eventLog.textContent = message;
 }
 
+function ensureAudioContext() {
+  if (audioContext) return audioContext;
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) throw new Error("Web Audio API is unavailable");
+  audioContext = new AudioContextClass();
+  soundBus = audioContext.createGain();
+  musicBus = audioContext.createGain();
+  soundBus.connect(audioContext.destination);
+  musicBus.connect(audioContext.destination);
+  updateAudioLevels();
+  return audioContext;
+}
+
+function updateAudioLevels() {
+  if (!audioContext) return;
+  const now = audioContext.currentTime;
+  const soundLevel = state.audioMuted || !state.soundOn ? 0 : state.soundVolume / 100;
+  const musicLevel = state.audioMuted || !state.musicOn ? 0 : state.musicVolume / 100;
+  soundBus.gain.setTargetAtTime(soundLevel, now, 0.025);
+  musicBus.gain.setTargetAtTime(musicLevel, now, 0.08);
+}
+
+function scheduleSynthNote(note, destination) {
+  if (!note.frequency || !audioContext) return;
+  const startAt = audioContext.currentTime + (note.delay || 0);
+  const stopAt = startAt + note.duration;
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+
+  oscillator.type = note.wave || "square";
+  oscillator.frequency.setValueAtTime(note.frequency, startAt);
+  oscillator.frequency.exponentialRampToValueAtTime(
+    Math.max(45, note.frequency * (note.slide || 1)),
+    stopAt
+  );
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(note.volume, startAt + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+  oscillator.connect(gain);
+  gain.connect(destination);
+  oscillator.start(startAt);
+  oscillator.stop(stopAt + 0.025);
+}
+
+function playMusicStep() {
+  if (!audioContext || state.audioMuted || !state.musicOn) return;
+  const note = MUSIC_PATTERN[musicStep % MUSIC_PATTERN.length];
+  musicStep += 1;
+  scheduleSynthNote({
+    frequency: note.bass,
+    duration: 0.42,
+    wave: "triangle",
+    volume: 0.11,
+    slide: 0.998,
+  }, musicBus);
+  scheduleSynthNote({
+    frequency: note.melody,
+    duration: 0.19,
+    wave: "square",
+    volume: 0.055,
+    slide: 1.002,
+  }, musicBus);
+}
+
+function startBackgroundMusic() {
+  if (!audioUnlocked || musicTimer || state.audioMuted || !state.musicOn) return;
+  ensureAudioContext();
+  playMusicStep();
+  musicTimer = window.setInterval(playMusicStep, MUSIC_STEP_MS);
+}
+
+function stopBackgroundMusic() {
+  if (!musicTimer) return;
+  window.clearInterval(musicTimer);
+  musicTimer = null;
+}
+
+function syncAudioPlayback() {
+  updateAudioLevels();
+  if (state.musicOn && !state.audioMuted) {
+    startBackgroundMusic();
+    return;
+  }
+  stopBackgroundMusic();
+}
+
+function renderAudioSettings() {
+  dom.audioSettings.hidden = !audioPanelOpen;
+  dom.audioSettingsToggle.setAttribute("aria-expanded", String(audioPanelOpen));
+  dom.audioSettingsToggle.classList.toggle("muted", state.audioMuted);
+  dom.audioSettingsToggle.textContent = state.audioMuted ? "♪" : "♫";
+  dom.audioStatus.textContent = state.audioMuted
+    ? "全部音频已静音"
+    : !audioUnlocked
+      ? "首次操作后开始播放"
+      : state.musicOn
+        ? "背景音乐播放中"
+        : "背景音乐已关闭";
+  dom.soundToggle.textContent = state.soundOn ? "开启" : "关闭";
+  dom.soundToggle.classList.toggle("active", state.soundOn);
+  dom.soundToggle.setAttribute("aria-pressed", String(state.soundOn));
+  dom.soundVolume.value = state.soundVolume;
+  dom.soundVolumeLabel.textContent = `${state.soundVolume}%`;
+  dom.musicToggle.textContent = state.musicOn ? "开启" : "关闭";
+  dom.musicToggle.classList.toggle("active", state.musicOn);
+  dom.musicToggle.setAttribute("aria-pressed", String(state.musicOn));
+  dom.musicVolume.value = state.musicVolume;
+  dom.musicVolumeLabel.textContent = `${state.musicVolume}%`;
+}
+
+function disableAudio() {
+  state.soundOn = false;
+  state.musicOn = false;
+  state.audioMuted = true;
+  stopBackgroundMusic();
+  renderAudioSettings();
+  saveGame();
+}
+
+function unlockAudio() {
+  try {
+    audioUnlocked = true;
+    const context = ensureAudioContext();
+    if (context.state === "suspended") context.resume();
+    syncAudioPlayback();
+    renderAudioSettings();
+  } catch {
+    disableAudio();
+  }
+}
+
 function playTone(type) {
-  if (!state.soundOn) return;
+  if (!state.soundOn || state.audioMuted) return;
 
   try {
-    audioContext ||= new AudioContext();
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    const tones = {
-      hit: [125, 0.045, "square"],
-      break: [190, 0.09, "square"],
-      diamond: [660, 0.18, "triangle"],
-      coin: [480, 0.15, "triangle"],
-      upgrade: [740, 0.2, "square"],
-      error: [88, 0.11, "sawtooth"],
-    };
-    const [frequency, duration, wave] = tones[type] || tones.hit;
-
-    oscillator.type = wave;
-    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      Math.max(50, frequency * 1.18),
-      audioContext.currentTime + duration
-    );
-    gain.gain.setValueAtTime(0.045, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
-    oscillator.connect(gain);
-    gain.connect(audioContext.destination);
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + duration);
+    unlockAudio();
+    (SOUND_EFFECTS[type] || SOUND_EFFECTS.hit).forEach((note) => scheduleSynthNote(note, soundBus));
   } catch {
-    state.soundOn = false;
-    dom.soundToggle.classList.add("muted");
+    disableAudio();
   }
+}
+
+function toggleAudioSettings() {
+  audioPanelOpen = !audioPanelOpen;
+  renderAudioSettings();
+}
+
+function closeAudioSettings() {
+  audioPanelOpen = false;
+  renderAudioSettings();
 }
 
 function toggleSound() {
   state.soundOn = !state.soundOn;
-  dom.soundToggle.classList.toggle("muted", !state.soundOn);
-  showToast(state.soundOn ? "音效已开启。" : "音效已关闭。");
+  unlockAudio();
+  syncAudioPlayback();
+  renderAudioSettings();
+  showToast(state.soundOn ? "挖矿音效已开启。" : "挖矿音效已关闭。");
+  saveGame();
+}
+
+function toggleMusic() {
+  state.musicOn = !state.musicOn;
+  unlockAudio();
+  syncAudioPlayback();
+  renderAudioSettings();
+  showToast(state.musicOn ? "背景音乐已开启。" : "背景音乐已关闭。");
+  saveGame();
+}
+
+function toggleAudioMute() {
+  state.audioMuted = !state.audioMuted;
+  if (!state.audioMuted) unlockAudio();
+  syncAudioPlayback();
+  renderAudioSettings();
+  showToast(state.audioMuted ? "全部音频已静音。" : "音频已恢复。");
+  saveGame();
+}
+
+function updateSoundVolume(event) {
+  state.soundVolume = Number(event.target.value);
+  unlockAudio();
+  updateAudioLevels();
+  renderAudioSettings();
+  saveGame();
+}
+
+function updateMusicVolume(event) {
+  state.musicVolume = Number(event.target.value);
+  unlockAudio();
+  syncAudioPlayback();
+  renderAudioSettings();
   saveGame();
 }
 
@@ -1729,6 +1975,8 @@ function resetGame() {
     caveGame.generateWorld();
     caveGame.resetPosition();
   }
+  syncAudioPlayback();
+  renderAudioSettings();
   renderAll();
   saveGame();
   showToast("矿洞已重置，新的旅程开始了。");
@@ -1741,7 +1989,13 @@ dom.inventoryList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-sell-material]");
   if (button) sellMaterial(button.dataset.sellMaterial);
 });
+dom.audioSettingsToggle.addEventListener("click", toggleAudioSettings);
+dom.closeAudioSettings.addEventListener("click", closeAudioSettings);
 dom.soundToggle.addEventListener("click", toggleSound);
+dom.musicToggle.addEventListener("click", toggleMusic);
+dom.soundVolume.addEventListener("input", updateSoundVolume);
+dom.soundVolume.addEventListener("change", () => playTone("coin"));
+dom.musicVolume.addEventListener("input", updateMusicVolume);
 dom.resetGame.addEventListener("click", resetGame);
 
 dom.toolShop.addEventListener("click", (event) => {
@@ -1808,11 +2062,20 @@ dom.startGame.addEventListener("click", () => {
 document.addEventListener("keydown", (event) => {
   if (!dom.introModal.classList.contains("hidden")) return;
   if (event.key.toLowerCase() === "s") sellInventory();
-  if (event.key.toLowerCase() === "m") toggleSound();
+  if (event.key.toLowerCase() === "m") toggleAudioMute();
+  if (event.key === "Escape" && audioPanelOpen) closeAudioSettings();
 });
 
+document.addEventListener("click", (event) => {
+  if (audioPanelOpen && event.target instanceof Element && !event.target.closest(".audio-control")) {
+    closeAudioSettings();
+  }
+});
+document.addEventListener("pointerdown", unlockAudio, { capture: true, once: true });
+document.addEventListener("keydown", unlockAudio, { capture: true, once: true });
+
 dom.introModal.classList.toggle("hidden", state.tutorialSeen);
-dom.soundToggle.classList.toggle("muted", !state.soundOn);
+renderAudioSettings();
 renderAll();
 createCaveGame();
 saveGame();

@@ -53,9 +53,44 @@
         </div>
 
         <div class="header-actions">
-          <button class="square-button" id="soundToggle" type="button" aria-label="切换音效" title="切换音效">
-            ♪
-          </button>
+          <div class="audio-control">
+            <button
+              class="square-button"
+              id="audioSettingsToggle"
+              type="button"
+              aria-label="打开音频设置"
+              aria-controls="audioSettings"
+              aria-expanded="false"
+              title="音频设置"
+            >♫</button>
+            <section class="audio-settings" id="audioSettings" aria-label="音频设置" hidden>
+              <header>
+                <div>
+                  <p class="eyebrow">CAVE JUKEBOX</p>
+                  <h3>矿洞音频</h3>
+                </div>
+                <button class="audio-close" id="closeAudioSettings" type="button" aria-label="关闭音频设置">×</button>
+              </header>
+              <p class="audio-status" id="audioStatus">首次操作后开始播放</p>
+              <div class="audio-setting-row">
+                <span>挖矿音效</span>
+                <button class="audio-switch" id="soundToggle" type="button">开启</button>
+              </div>
+              <label class="audio-volume">
+                <span>音效音量 <b id="soundVolumeLabel">55%</b></span>
+                <input id="soundVolume" type="range" min="0" max="100" step="5" value="55" />
+              </label>
+              <div class="audio-setting-row">
+                <span>背景音乐</span>
+                <button class="audio-switch" id="musicToggle" type="button">开启</button>
+              </div>
+              <label class="audio-volume">
+                <span>音乐音量 <b id="musicVolumeLabel">25%</b></span>
+                <input id="musicVolume" type="range" min="0" max="100" step="5" value="25" />
+              </label>
+              <small><kbd>M</kbd> 可快速静音或恢复全部音频</small>
+            </section>
+          </div>
           <button class="square-button" id="resetGame" type="button" aria-label="重置进度" title="重置进度">
             ↻
           </button>
@@ -213,7 +248,7 @@
               <p><b>操控小猫探索矿洞</b>，方向键移动，按 <b>E</b> 挖矿。耐久不足时，使用金币修理补满镐子。</p>
               <div class="key-hints">
                 <span><kbd>S</kbd> 出售</span>
-                <span><kbd>M</kbd> 音效</span>
+                <span><kbd>M</kbd> 音频静音</span>
                 <span><kbd>R</kbd> 重置矿洞位置</span>
               </div>
             </div>
