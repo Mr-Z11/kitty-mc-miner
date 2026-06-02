@@ -537,6 +537,32 @@ h3 {
   padding: 15px;
 }
 
+.inventory-panel,
+.shop-panel {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  scrollbar-color: #6e8b55 #172821;
+  scrollbar-width: thin;
+}
+
+.inventory-panel::-webkit-scrollbar,
+.shop-panel::-webkit-scrollbar {
+  width: 7px;
+}
+
+.inventory-panel::-webkit-scrollbar-track,
+.shop-panel::-webkit-scrollbar-track {
+  background: #172821;
+}
+
+.inventory-panel::-webkit-scrollbar-thumb,
+.shop-panel::-webkit-scrollbar-thumb {
+  border: 1px solid #172821;
+  background: #6e8b55;
+}
+
 .panel-heading {
   justify-content: space-between;
   padding-bottom: 13px;
@@ -1046,7 +1072,7 @@ h3 {
 
 .mine-scene {
   position: relative;
-  min-height: 546px;
+  height: clamp(390px, 38vw, 546px);
   overflow: hidden;
   border: 3px solid #0d1814;
   background:
@@ -2771,7 +2797,10 @@ kbd {
   }
 
   .panel {
+    position: static;
+    max-height: none;
     min-height: auto;
+    overflow-y: visible;
   }
 }
 
@@ -3043,7 +3072,7 @@ kbd {
   }
 
   .mine-scene {
-    min-height: 416px;
+    height: 416px;
   }
 
   .cave-hotbar {
