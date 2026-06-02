@@ -8,10 +8,10 @@
       content="小猫挖矿 MC 版：挖方块、卖矿石、升级镐子和背包。"
     />
     <title>小猫挖矿 MC 版</title>
-    <link rel="stylesheet" href="./styles.css" />
-    <script defer src="./game-data.js"></script>
-    <script defer src="./cave-game.js"></script>
-    <script defer src="./game.js"></script>
+    <link rel="stylesheet" href="./styles.css?v=7" />
+    <script defer src="./game-data.js?v=7"></script>
+    <script defer src="./cave-game.js?v=7"></script>
+    <script defer src="./game.js?v=7"></script>
   </head>
   <body>
     <div class="screen-noise" aria-hidden="true"></div>
@@ -19,6 +19,27 @@
     <div class="cave-lamp cave-lamp-right" aria-hidden="true"></div>
 
     <div class="game-shell">
+      <section class="statusbar" aria-label="任务看板">
+        <div class="status-objective">
+          <span class="pulse-dot"></span>
+          <div>
+            <small>主线任务</small>
+            <strong id="currentObjective">修复矿灯塔，让村庄重新亮起来</strong>
+          </div>
+        </div>
+        <div class="status-objective side-objective">
+          <span class="pulse-dot side-dot"></span>
+          <div>
+            <small>支线任务</small>
+            <strong id="sideObjective">进入短局探险，寻找更多矿物</strong>
+          </div>
+        </div>
+        <div class="ticker">
+          <span>矿洞通讯</span>
+          <p id="eventLog">村口矿灯熄灭，地底传来异响。</p>
+        </div>
+      </section>
+
       <header class="topbar">
         <div class="brand-lockup">
           <div class="brand-cube" aria-hidden="true">
@@ -34,6 +55,10 @@
           <div class="stat-chip coin-chip">
             <span class="stat-icon">¢</span>
             <div><small>金币</small><strong id="coinCount">0</strong></div>
+          </div>
+          <div class="stat-chip health-chip">
+            <span class="stat-icon health-icon">♥</span>
+            <div><small>体力</small><strong id="topHealth">♥ ♥ ♥ ♥ ♥</strong></div>
           </div>
           <div class="stat-chip">
             <span class="stat-icon depth-icon">↓</span>
@@ -113,7 +138,7 @@
         <div class="briefing-priority">
           <span>推荐优先级</span>
           <strong>主线材料 → 镐力与耐久 → 剑甲备战 → 区域 Boss</strong>
-          <small>镐子耐久不足时，使用矿洞下方的金币修理补满耐久并刷新当前矿层。</small>
+          <small>镐子耐久不足时，使用矿洞下方的金币修理原地补满耐久；也可以进入补给站购买热汤。</small>
         </div>
       </section>
 
@@ -211,10 +236,6 @@
 
             <div class="cave-hud">
               <div class="cave-hud-row">
-                <span class="cave-hud-label">生命</span>
-                <strong id="caveHealth">♥ ♥ ♥ ♥ ♥</strong>
-              </div>
-              <div class="cave-hud-row">
                 <span class="cave-hud-label">武器</span>
                 <strong id="swordHud">木剑 · 普通</strong>
               </div>
@@ -259,6 +280,20 @@
               </div>
             </div>
             <div class="mine-footer-actions">
+              <button class="mine-action-trigger layer-up-trigger" id="backtrackCave" type="button">
+                <span class="mine-action-icon">↑</span>
+                <span>
+                  <b>返回上层</b>
+                  <small id="backtrackCaveHint">当前已在入口</small>
+                </span>
+              </button>
+              <button class="mine-action-trigger cave-shop-trigger" id="openCaveShop" type="button">
+                <span class="mine-action-icon">▣</span>
+                <span>
+                  <b>矿洞补给站</b>
+                  <small>热汤 · 修理 · 售卖</small>
+                </span>
+              </button>
               <button class="repair-trigger" id="repairPickaxe" type="button">
                 <span class="repair-trigger-icon">⚒</span>
                 <span>
@@ -269,7 +304,7 @@
               </button>
               <button class="adventure-trigger" id="openAdventure" type="button">
                 <span class="adventure-trigger-icon">⚑</span>
-                <span><b>短局探险</b><small>免费出发 · <i id="ticketCount">3</i> 张券可选补给</small></span>
+                <span><b>短局探险</b><small><i id="freeExpeditionCount">2</i> / 2 次免费 · <i id="ticketCount">3</i> 张补给券</small></span>
               </button>
             </div>
           </div>
@@ -342,24 +377,27 @@
         </aside>
       </main>
 
-      <footer class="statusbar">
-        <div class="status-objective">
-          <span class="pulse-dot"></span>
-          <div>
-            <small>当前目标</small>
-            <strong id="currentObjective">挖矿并攒下第一桶金币</strong>
-          </div>
-        </div>
-        <div class="ticker">
-          <span>矿洞通讯</span>
-          <p id="eventLog">村口矿灯熄灭，地底传来异响。</p>
-        </div>
-      </footer>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite">
       <span>⚑ 矿洞事件</span>
       <strong id="toastMessage"></strong>
+    </div>
+
+    <div class="cave-shop-modal hidden" id="caveShopModal" role="dialog" aria-modal="true" aria-labelledby="caveShopTitle">
+      <div class="cave-shop-card">
+        <header class="adventure-header">
+          <div>
+            <p class="eyebrow">UNDERGROUND SUPPLY POST</p>
+            <h2 id="caveShopTitle">矿洞补给站</h2>
+          </div>
+          <button class="square-button" id="closeCaveShop" type="button" aria-label="关闭矿洞补给站">×</button>
+        </header>
+        <section class="cave-shop-content">
+          <p>不必返回村庄。用金币补充体力、原地维护镐子，或快速出售背包中的矿物。</p>
+          <div class="cave-supply-list" id="caveSupplyList"></div>
+        </section>
+      </div>
     </div>
 
     <div class="adventure-modal hidden" id="adventureModal" role="dialog" aria-modal="true" aria-labelledby="adventureTitle">
@@ -374,8 +412,8 @@
 
         <section class="route-select" id="routeSelect">
           <div class="adventure-intro">
-            <p>带上矿灯，选择一条路线。每次行动消耗 1 点体力，途中可以随时撤离并保留战利品。探险券不再是门票，可选择消耗 1 张换取额外体力。</p>
-            <strong><span id="modalTicketCount">3</span> / 3 探险券</strong>
+            <p>带上矿灯，选择一条路线。每次行动消耗 1 点体力，途中可以随时撤离并保留战利品。免费出发最多保留 2 次，每挖 12 个方块恢复 1 次；也可以消耗 1 张探险券补给出发并获得额外体力。</p>
+            <strong><span id="modalFreeExpeditionCount">2</span> / 2 次免费 · <span id="modalTicketCount">3</span> / 3 探险券</strong>
           </div>
           <div class="route-list" id="routeList"></div>
         </section>

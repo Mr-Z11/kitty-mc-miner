@@ -525,6 +525,13 @@
       this.notifyStatus();
     }
 
+    healPlayer(amount) {
+      const previousHp = this.player.hp;
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.max(0, amount));
+      this.notifyStatus();
+      return this.player.hp - previousHp;
+    }
+
     setHint(message) {
       if (this.options.onHint) this.options.onHint(message);
     }
@@ -763,6 +770,7 @@
         x: Math.round(this.player.x),
         y: Math.round(this.player.y),
         hp: this.player.hp,
+        maxHp: this.player.maxHp,
         cameraX: Math.round(this.cameraX),
         cameraY: Math.round(this.cameraY),
         durability: this.getConfig().durability,
