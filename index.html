@@ -8,10 +8,10 @@
       content="小猫挖矿 MC 版：挖方块、卖矿石、升级镐子和背包。"
     />
     <title>小猫挖矿 MC 版</title>
-    <link rel="stylesheet" href="./styles.css?v=7" />
-    <script defer src="./game-data.js?v=7"></script>
-    <script defer src="./cave-game.js?v=7"></script>
-    <script defer src="./game.js?v=7"></script>
+    <link rel="stylesheet" href="./styles.css?v=8" />
+    <script defer src="./game-data.js?v=8"></script>
+    <script defer src="./cave-game.js?v=8"></script>
+    <script defer src="./game.js?v=8"></script>
   </head>
   <body>
     <div class="screen-noise" aria-hidden="true"></div>
@@ -67,6 +67,10 @@
           <div class="stat-chip">
             <span class="stat-icon block-icon">◆</span>
             <div><small>已挖方块</small><strong id="minedCount">0</strong></div>
+          </div>
+          <div class="stat-chip power-chip">
+            <span class="stat-icon power-icon">⛏</span>
+            <div><small>挖掘力</small><strong id="topMiningPower">1</strong></div>
           </div>
           <div class="stat-chip level-chip">
             <span class="stat-icon level-icon">★</span>
@@ -138,7 +142,7 @@
         <div class="briefing-priority">
           <span>推荐优先级</span>
           <strong>主线材料 → 镐力与耐久 → 剑甲备战 → 区域 Boss</strong>
-          <small>镐子耐久不足时，使用矿洞下方的金币修理原地补满耐久；也可以进入补给站购买热汤。</small>
+          <small>主矿洞每挖 4 个方块消耗 1 点体力。耐久或体力不足时，进入补给站购买修理与热汤。</small>
         </div>
       </section>
 
@@ -247,6 +251,10 @@
                 <span class="cave-hud-label">镐耐久</span>
                 <strong id="caveDurability">18 / 18</strong>
               </div>
+              <div class="cave-hud-row">
+                <span class="cave-hud-label">挖掘力</span>
+                <strong id="caveMiningPower">1</strong>
+              </div>
             </div>
 
             <div class="boss-hud hidden" id="bossHud">
@@ -272,7 +280,7 @@
 
           <div class="mine-footer">
             <div>
-              <p><b>操控小猫探索矿洞</b>，方向键移动，按 <b>E</b> 挖矿。耐久不足时，使用金币修理补满镐子。</p>
+              <p><b>操控小猫探索矿洞</b>，方向键移动，按 <b>E</b> 挖矿。每挖 4 个方块消耗 1 点体力，补给站可以恢复体力并买卖材料。</p>
               <div class="key-hints">
                 <span><kbd>S</kbd> 出售</span>
                 <span><kbd>M</kbd> 音频静音</span>
@@ -318,6 +326,14 @@
             </div>
             <span class="panel-tag shop-tag">营业中</span>
           </div>
+
+          <section class="shop-section mine-level-section">
+            <div class="section-title">
+              <h3>矿洞等级</h3>
+              <small>共 <b id="mineLevelCount">5</b> 层区域</small>
+            </div>
+            <div class="mine-level-list" id="mineLevelList"></div>
+          </section>
 
           <section class="shop-section">
             <div class="section-title">
@@ -394,7 +410,7 @@
           <button class="square-button" id="closeCaveShop" type="button" aria-label="关闭矿洞补给站">×</button>
         </header>
         <section class="cave-shop-content">
-          <p>不必返回村庄。用金币补充体力、原地维护镐子，或快速出售背包中的矿物。</p>
+          <p>不必返回村庄。用金币补充体力、维护镐子，也可以按需购买或出售材料。</p>
           <div class="cave-supply-list" id="caveSupplyList"></div>
         </section>
       </div>

@@ -484,7 +484,7 @@
     handlePlayerDeath() {
       const lostCoins = this.options.onPlayerDeath ? this.options.onPlayerDeath() : 0;
       this.setHint(`小猫回到了矿洞入口${lostCoins ? `，遗失 ${lostCoins} 金币` : ""}。`);
-      this.resetPosition();
+      this.resetPosition(true);
     }
 
     handleBottomFall() {
@@ -512,13 +512,13 @@
       }
     }
 
-    resetPosition() {
+    resetPosition(restoreHealth = false) {
       this.restoreEntrancePlatform();
       this.player.x = 96;
       this.player.y = FLOOR_ROW * TILE - PLAYER_HEIGHT;
       this.player.vx = 0;
       this.player.vy = 0;
-      this.player.hp = this.player.maxHp;
+      if (restoreHealth) this.player.hp = this.player.maxHp;
       this.player.invulnerableUntil = performance.now() + 1000;
       this.cameraX = 0;
       this.cameraY = 0;
@@ -530,6 +530,16 @@
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.max(0, amount));
       this.notifyStatus();
       return this.player.hp - previousHp;
+    }
+
+    spendPlayerHealth(amount = 1) {
+      this.player.hp = Math.max(0, this.player.hp - Math.max(0, amount));
+      if (this.player.hp <= 0) {
+        this.handlePlayerDeath();
+        return 0;
+      }
+      this.notifyStatus();
+      return this.player.hp;
     }
 
     setHint(message) {

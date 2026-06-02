@@ -5,6 +5,7 @@ const MAX_TICKETS = 3;
 const TICKET_MINE_INTERVAL = 12;
 const MAX_FREE_EXPEDITIONS = 2;
 const FREE_EXPEDITION_MINE_INTERVAL = 12;
+const CAVE_FATIGUE_INTERVAL = 4;
 const {
   MATERIALS,
   ENVIRONMENTS,
@@ -331,6 +332,7 @@ const dom = {
   topHealth: document.querySelector("#topHealth"),
   depthCount: document.querySelector("#depthCount"),
   minedCount: document.querySelector("#minedCount"),
+  topMiningPower: document.querySelector("#topMiningPower"),
   levelCount: document.querySelector("#levelCount"),
   xpMeter: document.querySelector("#xpMeter"),
   streakCount: document.querySelector("#streakCount"),
@@ -355,10 +357,13 @@ const dom = {
   swordShop: document.querySelector("#swordShop"),
   armorShop: document.querySelector("#armorShop"),
   perkShop: document.querySelector("#perkShop"),
+  mineLevelCount: document.querySelector("#mineLevelCount"),
+  mineLevelList: document.querySelector("#mineLevelList"),
   caveCanvas: document.querySelector("#caveCanvas"),
   swordHud: document.querySelector("#swordHud"),
   caveArmor: document.querySelector("#caveArmor"),
   caveDurability: document.querySelector("#caveDurability"),
+  caveMiningPower: document.querySelector("#caveMiningPower"),
   repairPickaxe: document.querySelector("#repairPickaxe"),
   repairPickaxeCost: document.querySelector("#repairPickaxeCost"),
   repairPickaxeHint: document.querySelector("#repairPickaxeHint"),
@@ -546,6 +551,31 @@ function missingRequirement(cost) {
       : `${MATERIALS[type].name} ${amount - state.inventory[type]} 块`
     )
     .join("、");
+}
+
+function missingRequirementParts(cost) {
+  return Object.entries(cost)
+    .filter(([type, amount]) => type === "coins" ? state.coins < amount : state.inventory[type] < amount)
+    .map(([type, amount]) => ({
+      type,
+      amount: type === "coins" ? amount - state.coins : amount - state.inventory[type],
+    }));
+}
+
+function missingRequirementLabel(cost) {
+  const parts = missingRequirementParts(cost);
+  if (!parts.length) return "";
+  if (parts.some(({ type }) => type === "coins")) return "金币不足";
+  return parts.map(({ type, amount }) => `缺${MATERIALS[type].name} × ${amount}`).join("、");
+}
+
+function requirementGuidance(cost) {
+  const parts = missingRequirementParts(cost);
+  if (!parts.length) return "";
+  return parts.map(({ type, amount }) => type === "coins"
+    ? `金币不足 ${amount}：出售矿物或击败怪物获得`
+    : `缺${MATERIALS[type].name} × ${amount}：${MATERIALS[type].origin}获得`
+  ).join("；");
 }
 
 function itemCost(item) {
@@ -785,6 +815,7 @@ function currentZone() {
 function renderAll() {
   renderStats();
   renderInventory();
+  renderMineLevels();
   renderShop();
   renderVillage();
   renderRepairStation();
@@ -806,6 +837,7 @@ function renderStats() {
   dom.coinCount.textContent = state.coins.toLocaleString("zh-CN");
   dom.depthCount.textContent = accessibleDepth();
   dom.minedCount.textContent = state.mined;
+  dom.topMiningPower.textContent = TOOLS[state.toolIndex].damage;
   dom.streakCount.textContent = state.streak;
   dom.zoneName.textContent = zone.name;
   dom.zoneProgress.style.width = `${Math.min(100, progress)}%`;
@@ -890,6 +922,7 @@ function renderCaveHud(status) {
   dom.swordHud.className = `quality-${sword.qualityClass}`;
   dom.caveArmor.textContent = armorScore();
   dom.caveDurability.textContent = `${state.pickaxeDurability} / ${maxPickaxeDurability()}`;
+  dom.caveMiningPower.textContent = TOOLS[state.toolIndex].damage;
   dom.caveDurability.classList.toggle("is-empty", state.pickaxeDurability <= 0);
   dom.bossHud.classList.toggle("hidden", !caveStatus?.boss);
   if (caveStatus?.boss) {
@@ -933,6 +966,30 @@ function renderCaveShop() {
   const caveStatus = caveGame?.getStatus();
   const healthFull = !caveStatus || caveStatus.hp >= caveStatus.maxHp;
   const durabilityFull = state.pickaxeDurability >= maxPickaxeDurability();
+  const backpackFull = inventoryTotal() >= BACKPACKS[state.backpackIndex].capacity;
+  const materialTrades = Object.entries(MATERIALS)
+    .filter(([type]) => state.discoveries.materials[type])
+    .map(([type, material]) => {
+      const buyPrice = material.value * 3;
+      return `
+        <article class="cave-supply-item material-trade-item">
+          <i class="mini-block" style="${miniBlockStyle(type)}" aria-hidden="true"></i>
+          <div class="cave-supply-copy">
+            <strong>${material.name}</strong>
+            <small>来源：${material.origin} · 买入 ${buyPrice}¢ / 卖出 ${material.value}¢</small>
+          </div>
+          <div class="trade-actions">
+            <button class="buy-button" type="button" data-buy-cave-material="${type}" ${backpackFull || state.coins < buyPrice ? "disabled" : ""}>
+              ${backpackFull ? "背包已满" : state.coins < buyPrice ? "金币不足" : `买入 ${buyPrice}¢`}
+            </button>
+            <button class="buy-button sell-trade-button" type="button" data-sell-cave-material="${type}" ${state.inventory[type] <= 0 ? "disabled" : ""}>
+              卖出 ${material.value}¢
+            </button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
 
   dom.caveSupplyList.innerHTML = `
     <article class="cave-supply-item">
@@ -942,7 +999,7 @@ function renderCaveShop() {
         <small>恢复 2 点体力，不离开当前矿层。</small>
       </div>
       <button class="buy-button" type="button" data-buy-cave-supply="soup" ${healthFull || state.coins < soupCost ? "disabled" : ""}>
-        ${healthFull ? "体力已满" : `${soupCost} ¢`}
+        ${healthFull ? "体力已满" : state.coins < soupCost ? "金币不足" : `${soupCost} ¢`}
       </button>
     </article>
     <article class="cave-supply-item">
@@ -952,7 +1009,7 @@ function renderCaveShop() {
         <small>原地补满镐子耐久，保留位置和已挖开的通道。</small>
       </div>
       <button class="buy-button" type="button" data-buy-cave-supply="repair" ${durabilityFull || state.coins < repairCost ? "disabled" : ""}>
-        ${durabilityFull ? "耐久已满" : `${repairCost} ¢`}
+        ${durabilityFull ? "耐久已满" : state.coins < repairCost ? "金币不足" : `${repairCost} ¢`}
       </button>
     </article>
     <article class="cave-supply-item">
@@ -965,7 +1022,34 @@ function renderCaveShop() {
         ${sellValue > 0 ? `+ ${sellValue.toLocaleString("zh-CN")} ¢` : "背包为空"}
       </button>
     </article>
+    <div class="trade-divider">
+      <strong>材料交易</strong>
+      <small>发现过的材料会加入交易目录。深层材料仍建议亲自下矿采集。</small>
+    </div>
+    ${materialTrades}
   `;
+}
+
+function renderMineLevels() {
+  dom.mineLevelCount.textContent = ZONES.length;
+  dom.mineLevelList.innerHTML = ZONES.map((zone, index) => {
+    const active = currentZone().id === zone.id;
+    const unlocked = deepestDepthReached() >= zone.from;
+    const depthLabel = zone.to === Infinity ? `${zone.from}m+` : `${zone.from}-${zone.to}m`;
+    const requirement = zone.requiredToolIndex || zone.requiredLanternLevel
+      ? `${TOOLS[zone.requiredToolIndex].name} · ${LANTERNS[zone.requiredLanternLevel].name}`
+      : "初始开放";
+    return `
+      <div class="mine-level-item ${active ? "active" : ""} ${unlocked ? "unlocked" : ""}">
+        <span>${String(index + 1).padStart(2, "0")}</span>
+        <div>
+          <strong>${zone.name}</strong>
+          <small>${depthLabel} · ${requirement}</small>
+        </div>
+        <em>${active ? "当前" : unlocked ? "已开放" : "未开放"}</em>
+      </div>
+    `;
+  }).join("");
 }
 
 function renderVillage() {
@@ -1005,6 +1089,11 @@ function renderVillage() {
     const resonanceCost = beaconResonanceCost();
     const resonanceMaxed = state.beaconResonance >= MAX_BEACON_RESONANCE;
     dom.villageAction.innerHTML = `
+      <div class="victory-banner">
+        <span>★ VICTORY ★</span>
+        <strong>胜利！地心矿灯重新亮起</strong>
+        <small>五层主线矿洞已经全部净化，自由深渊模式正式开放。</small>
+      </div>
       <div class="abyss-summary">
         <strong>深渊记录</strong>
         <span>委托 ${state.abyssContractsCompleted}</span>
@@ -1045,10 +1134,12 @@ function renderVillage() {
   const built = isVillageBuilt(chapter.building.id);
   if (!built) {
     const missing = missingRequirement(chapter.building.cost);
+    const guidance = requirementGuidance(chapter.building.cost);
     dom.villageAction.innerHTML = `
       <p>${formatRequirement(chapter.building.cost)}</p>
+      ${guidance ? `<small class="requirement-guidance">${guidance}</small>` : ""}
       <button class="buy-button village-button" type="button" data-repair-building="${chapter.building.id}" ${missing ? "disabled" : ""}>
-        ${missing ? "材料不足" : `修复${chapter.building.name}`}
+        ${missing ? missingRequirementLabel(chapter.building.cost) : `修复${chapter.building.name}`}
       </button>
     `;
     return;
@@ -1071,13 +1162,15 @@ function renderShop() {
       const next = index === state.toolIndex + 1;
       const deepEnough = deepestDepthReached() >= tool.depth;
       const missing = missingRequirement(itemCost(tool));
-      const label = owned ? "已拥有" : !deepEnough ? `深度 ${tool.depth}m` : missing ? "材料不足" : `${tool.price} ¢`;
+      const guidance = !owned && next && deepEnough ? requirementGuidance(itemCost(tool)) : "";
+      const label = owned ? "已拥有" : !deepEnough ? `深度 ${tool.depth}m` : missing ? missingRequirementLabel(itemCost(tool)) : `${tool.price} ¢`;
       return `
         <div class="shop-item">
           <span class="shop-item-icon" aria-hidden="true">⛏</span>
           <div class="shop-copy">
             <strong>${tool.name}</strong>
             <small>挖掘力 ${tool.damage}${tool.recipe ? ` · ${formatRequirement(tool.recipe)}` : ""}</small>
+            ${guidance ? `<i class="requirement-guidance">${guidance}</i>` : ""}
           </div>
           <button
             class="buy-button"
@@ -1105,7 +1198,7 @@ function renderShop() {
         type="button"
         data-buy-durability="${state.durabilityLevel + 1}"
         ${!nextDurabilityUpgrade || !durabilityAffordable ? "disabled" : ""}
-      >${nextDurabilityUpgrade ? `${nextDurabilityUpgrade.price} ¢` : "已满级"}</button>
+      >${nextDurabilityUpgrade ? durabilityAffordable ? `${nextDurabilityUpgrade.price} ¢` : "金币不足" : "已满级"}</button>
     </div>
   `;
 
@@ -1115,19 +1208,21 @@ function renderShop() {
       const owned = index <= state.backpackIndex;
       const next = index === state.backpackIndex + 1;
       const missing = missingRequirement(itemCost(backpack));
+      const guidance = !owned && next ? requirementGuidance(itemCost(backpack)) : "";
       return `
         <div class="shop-item">
           <span class="shop-item-icon pack-icon" aria-hidden="true">▣</span>
           <div class="shop-copy">
             <strong>${backpack.name}</strong>
             <small>容量 ${backpack.capacity}${backpack.recipe ? ` · ${formatRequirement(backpack.recipe)}` : ""}</small>
+            ${guidance ? `<i class="requirement-guidance">${guidance}</i>` : ""}
           </div>
           <button
             class="buy-button"
             type="button"
             data-buy-pack="${index}"
             ${owned || !next || missing ? "disabled" : ""}
-          >${owned ? "已拥有" : missing ? "材料不足" : `${backpack.price} ¢`}</button>
+          >${owned ? "已拥有" : missing ? missingRequirementLabel(itemCost(backpack)) : `${backpack.price} ¢`}</button>
         </div>
       `;
     })
@@ -1142,13 +1237,14 @@ function renderShop() {
       <div class="shop-copy">
         <strong>${lantern.name} <i>Lv.${state.lanternLevel}</i></strong>
         <small>收藏概率 +${Math.round(lantern.rareBonus * 100)}%${nextLantern?.recipe ? ` · 下级需要 ${formatRequirement(nextLantern.recipe)}` : " · 已达顶级"}</small>
+        ${nextLantern && lanternMissing ? `<i class="requirement-guidance">${requirementGuidance(itemCost(nextLantern))}</i>` : ""}
       </div>
       <button
         class="buy-button"
         type="button"
         data-buy-lantern="${state.lanternLevel + 1}"
         ${!nextLantern || lanternMissing ? "disabled" : ""}
-      >${nextLantern ? lanternMissing ? "材料不足" : `${nextLantern.price} ¢` : "已满级"}</button>
+      >${nextLantern ? lanternMissing ? missingRequirementLabel(itemCost(nextLantern)) : `${nextLantern.price} ¢` : "已满级"}</button>
     </div>
   `;
 
@@ -1167,7 +1263,7 @@ function renderShop() {
         type="button"
         data-convert-sword="${state.swordIndex + 1}"
         ${!nextSword || !swordAffordable ? "disabled" : ""}
-      >${nextSword ? `${nextSword.price} ¢` : "已满级"}</button>
+      >${nextSword ? swordAffordable ? `${nextSword.price} ¢` : "金币不足" : "已满级"}</button>
     </div>
   `;
 
@@ -1189,7 +1285,7 @@ function renderShop() {
             type="button"
             data-craft-armor="${slotId}"
             ${!nextTier || state.coins < price ? "disabled" : ""}
-          >${nextTier ? `${price} ¢` : "已满级"}</button>
+          >${nextTier ? state.coins < price ? "金币不足" : `${price} ¢` : "已满级"}</button>
         </div>
       `;
     })
@@ -1212,7 +1308,7 @@ function renderShop() {
             type="button"
             data-buy-perk="${perkId}"
             ${maxed || state.coins < price ? "disabled" : ""}
-          >${maxed ? "已满级" : `${price} ¢`}</button>
+          >${maxed ? "已满级" : state.coins < price ? "金币不足" : `${price} ¢`}</button>
         </div>
       `;
     })
@@ -1627,6 +1723,10 @@ function collectCaveMaterial({ type }) {
   markMaterialDiscovered(type);
   state.pickaxeDurability = Math.max(0, state.pickaxeDurability - 1);
   state.mined += 1;
+  if (state.mined % CAVE_FATIGUE_INTERVAL === 0) {
+    caveGame?.spendPlayerHealth(1);
+    logEvent(`连续挖掘消耗了 1 点体力。补给站热汤可以恢复体力。`);
+  }
   addXp(2);
   addMiningExpeditionRewards();
   logEvent(luckyDrop && amount > 1
@@ -1756,6 +1856,28 @@ function buyCaveSupply(supplyId) {
   if (supplyId === "sell") sellInventory();
 }
 
+function buyCaveMaterial(type) {
+  const material = MATERIALS[type];
+  if (!material || !state.discoveries.materials[type]) return;
+  const price = material.value * 3;
+  if (inventoryTotal() >= BACKPACKS[state.backpackIndex].capacity) {
+    showToast("背包已满，先出售材料或升级背包。");
+    return;
+  }
+  if (state.coins < price) {
+    showToast(`金币不足：购买${material.name}需要 ${price} 金币。`);
+    playTone("error");
+    return;
+  }
+  state.coins -= price;
+  state.inventory[type] += 1;
+  showToast(`购买 1 块${material.name}，支付 ${price} 金币。`);
+  logEvent(`补给站送来 1 块${material.name}。`);
+  playTone("coin");
+  renderAll();
+  saveGame();
+}
+
 function defeatCaveEnemy({ id, isBoss, name, coins, xp, marks = 0 }) {
   state.coins += coins;
   addXp(xp);
@@ -1823,7 +1945,7 @@ function completeStoryBoss(bossId) {
   if (!nextChapter) ensureAbyssContract();
   showToast(nextChapter
     ? `区域净化完成：${chapter.unlock}已经开放！`
-    : "地心矿灯重新亮起，主线完成！自由深渊模式已开放。"
+    : "胜利！地心矿灯重新亮起，五层主线全部通关！自由深渊模式已开放。"
   );
   logEvent(nextChapter
     ? `${chapter.boss.name}倒下了。${chapter.unlock}的道路已经打开，村庄等待下一项修复工程。`
@@ -2439,8 +2561,12 @@ dom.backtrackCave.addEventListener("click", ascendCaveLayer);
 dom.openCaveShop.addEventListener("click", openCaveShop);
 dom.closeCaveShop.addEventListener("click", closeCaveShop);
 dom.caveSupplyList.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-buy-cave-supply]");
-  if (button) buyCaveSupply(button.dataset.buyCaveSupply);
+  const supplyButton = event.target.closest("[data-buy-cave-supply]");
+  if (supplyButton) buyCaveSupply(supplyButton.dataset.buyCaveSupply);
+  const buyMaterialButton = event.target.closest("[data-buy-cave-material]");
+  if (buyMaterialButton) buyCaveMaterial(buyMaterialButton.dataset.buyCaveMaterial);
+  const sellMaterialButton = event.target.closest("[data-sell-cave-material]");
+  if (sellMaterialButton) sellMaterial(sellMaterialButton.dataset.sellCaveMaterial);
 });
 dom.inventoryList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-sell-material]");
