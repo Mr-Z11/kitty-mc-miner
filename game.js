@@ -565,17 +565,23 @@ function missingRequirementParts(cost) {
 function missingRequirementLabel(cost) {
   const parts = missingRequirementParts(cost);
   if (!parts.length) return "";
-  if (parts.some(({ type }) => type === "coins")) return "金币不足";
-  return parts.map(({ type, amount }) => `缺${MATERIALS[type].name} × ${amount}`).join("、");
+  return parts.map(({ type, amount }) => type === "coins"
+    ? `缺 ${amount} 金币`
+    : `缺${MATERIALS[type].name} × ${amount}`
+  ).join("、");
 }
 
 function requirementGuidance(cost) {
   const parts = missingRequirementParts(cost);
   if (!parts.length) return "";
   return parts.map(({ type, amount }) => type === "coins"
-    ? `金币不足 ${amount}：出售矿物或击败怪物获得`
+    ? `缺 ${amount} 金币：出售矿物或击败怪物获得`
     : `缺${MATERIALS[type].name} × ${amount}：${MATERIALS[type].origin}获得`
   ).join("；");
+}
+
+function missingCoinsLabel(requiredCoins) {
+  return `缺 ${Math.max(0, requiredCoins - state.coins)} 金币`;
 }
 
 function itemCost(item) {
@@ -948,7 +954,7 @@ function renderRepairStation() {
   dom.repairPickaxeHint.textContent = full
     ? "镐子状态良好"
     : state.coins < cost
-      ? `还差 ${cost - state.coins} 金币`
+      ? missingCoinsLabel(cost)
       : "原地补满耐久";
 }
 
@@ -980,7 +986,7 @@ function renderCaveShop() {
           </div>
           <div class="trade-actions">
             <button class="buy-button" type="button" data-buy-cave-material="${type}" ${backpackFull || state.coins < buyPrice ? "disabled" : ""}>
-              ${backpackFull ? "背包已满" : state.coins < buyPrice ? "金币不足" : `买入 ${buyPrice}¢`}
+              ${backpackFull ? "背包已满" : state.coins < buyPrice ? missingCoinsLabel(buyPrice) : `买入 ${buyPrice}¢`}
             </button>
             <button class="buy-button sell-trade-button" type="button" data-sell-cave-material="${type}" ${state.inventory[type] <= 0 ? "disabled" : ""}>
               卖出 ${material.value}¢
@@ -999,7 +1005,7 @@ function renderCaveShop() {
         <small>恢复 2 点体力，不离开当前矿层。</small>
       </div>
       <button class="buy-button" type="button" data-buy-cave-supply="soup" ${healthFull || state.coins < soupCost ? "disabled" : ""}>
-        ${healthFull ? "体力已满" : state.coins < soupCost ? "金币不足" : `${soupCost} ¢`}
+        ${healthFull ? "体力已满" : state.coins < soupCost ? missingCoinsLabel(soupCost) : `${soupCost} ¢`}
       </button>
     </article>
     <article class="cave-supply-item">
@@ -1009,7 +1015,7 @@ function renderCaveShop() {
         <small>原地补满镐子耐久，保留位置和已挖开的通道。</small>
       </div>
       <button class="buy-button" type="button" data-buy-cave-supply="repair" ${durabilityFull || state.coins < repairCost ? "disabled" : ""}>
-        ${durabilityFull ? "耐久已满" : state.coins < repairCost ? "金币不足" : `${repairCost} ¢`}
+        ${durabilityFull ? "耐久已满" : state.coins < repairCost ? missingCoinsLabel(repairCost) : `${repairCost} ¢`}
       </button>
     </article>
     <article class="cave-supply-item">
@@ -1198,7 +1204,7 @@ function renderShop() {
         type="button"
         data-buy-durability="${state.durabilityLevel + 1}"
         ${!nextDurabilityUpgrade || !durabilityAffordable ? "disabled" : ""}
-      >${nextDurabilityUpgrade ? durabilityAffordable ? `${nextDurabilityUpgrade.price} ¢` : "金币不足" : "已满级"}</button>
+      >${nextDurabilityUpgrade ? durabilityAffordable ? `${nextDurabilityUpgrade.price} ¢` : missingCoinsLabel(nextDurabilityUpgrade.price) : "已满级"}</button>
     </div>
   `;
 
@@ -1263,7 +1269,7 @@ function renderShop() {
         type="button"
         data-convert-sword="${state.swordIndex + 1}"
         ${!nextSword || !swordAffordable ? "disabled" : ""}
-      >${nextSword ? swordAffordable ? `${nextSword.price} ¢` : "金币不足" : "已满级"}</button>
+      >${nextSword ? swordAffordable ? `${nextSword.price} ¢` : missingCoinsLabel(nextSword.price) : "已满级"}</button>
     </div>
   `;
 
@@ -1285,7 +1291,7 @@ function renderShop() {
             type="button"
             data-craft-armor="${slotId}"
             ${!nextTier || state.coins < price ? "disabled" : ""}
-          >${nextTier ? state.coins < price ? "金币不足" : `${price} ¢` : "已满级"}</button>
+          >${nextTier ? state.coins < price ? missingCoinsLabel(price) : `${price} ¢` : "已满级"}</button>
         </div>
       `;
     })
@@ -1308,7 +1314,7 @@ function renderShop() {
             type="button"
             data-buy-perk="${perkId}"
             ${maxed || state.coins < price ? "disabled" : ""}
-          >${maxed ? "已满级" : state.coins < price ? "金币不足" : `${price} ¢`}</button>
+          >${maxed ? "已满级" : state.coins < price ? missingCoinsLabel(price) : `${price} ¢`}</button>
         </div>
       `;
     })
@@ -1400,10 +1406,10 @@ function renderMerchant() {
     </div>
     <div class="merchant-actions">
       <button class="buy-button" type="button" data-merchant-action="rest" ${state.coins < merchant.restCost ? "disabled" : ""}>
-        热汤休息 · ${merchant.restCost} ¢ · 体力 +2
+        热汤休息 · ${state.coins < merchant.restCost ? missingCoinsLabel(merchant.restCost) : `${merchant.restCost} ¢`} · 体力 +2
       </button>
       <button class="buy-button" type="button" data-merchant-action="buy" ${state.coins < merchant.materialCost ? "disabled" : ""}>
-        购买${MATERIALS[merchant.material].name} · ${merchant.materialCost} ¢
+        购买${MATERIALS[merchant.material].name} · ${state.coins < merchant.materialCost ? missingCoinsLabel(merchant.materialCost) : `${merchant.materialCost} ¢`}
       </button>
       <button class="secondary-button" type="button" data-merchant-action="skip">礼貌离开</button>
     </div>
@@ -1831,7 +1837,7 @@ function buyCaveSupply(supplyId) {
   if (supplyId === "soup") {
     const cost = caveSoupCost();
     if (state.coins < cost) {
-      showToast(`矿工热汤需要 ${cost} 金币。`);
+      showToast(`购买矿工热汤还缺 ${cost - state.coins} 金币。`);
       return;
     }
     const restored = caveGame?.healPlayer(2) || 0;
@@ -1865,7 +1871,7 @@ function buyCaveMaterial(type) {
     return;
   }
   if (state.coins < price) {
-    showToast(`金币不足：购买${material.name}需要 ${price} 金币。`);
+    showToast(`购买${material.name}还缺 ${price - state.coins} 金币。`);
     playTone("error");
     return;
   }
