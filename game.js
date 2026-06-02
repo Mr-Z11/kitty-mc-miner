@@ -3,22 +3,19 @@
 const SAVE_KEY = "kitty-mc-miner-save-v1";
 const MAX_TICKETS = 3;
 const TICKET_MINE_INTERVAL = 12;
-
-const MATERIALS = {
-  wood: { name: "木材", value: 3, hp: 1 },
-  stone: { name: "石材", value: 5, hp: 2 },
-  iron: { name: "铁矿", value: 12, hp: 4 },
-  gold: { name: "黄金", value: 24, hp: 5 },
-  diamond: { name: "钻石", value: 58, hp: 7 },
-};
-
-const TOOLS = [
-  { name: "木镐", damage: 1, price: 0, depth: 1 },
-  { name: "石镐", damage: 2, price: 70, depth: 2 },
-  { name: "铁镐", damage: 4, price: 240, depth: 8 },
-  { name: "黄金镐", damage: 6, price: 580, depth: 16 },
-  { name: "钻石镐", damage: 10, price: 1380, depth: 27 },
-];
+const {
+  MATERIALS,
+  ENVIRONMENTS,
+  COLLECTIBLES,
+  TOOLS,
+  BACKPACKS,
+  LANTERNS,
+  ROUTES,
+  EXPEDITION_EVENT_WEIGHTS,
+  environmentForDepth,
+  depthGateFor,
+  weightedMaterial,
+} = window.KittyGameData;
 
 const DURABILITY_UPGRADES = [
   { name: "基础维护", bonus: 0, price: 0 },
@@ -50,20 +47,7 @@ const ARMOR_TIERS = [
   { name: "钻石", quality: "传说", qualityClass: "legendary", defense: 4, price: 680 },
 ];
 
-const BACKPACKS = [
-  { name: "布口袋", capacity: 20, price: 0 },
-  { name: "皮革背包", capacity: 42, price: 90 },
-  { name: "铁扣矿包", capacity: 78, price: 320 },
-  { name: "钻石箱包", capacity: 140, price: 880 },
-];
-
-const ZONES = [
-  { name: "林地浅层", from: 1, to: 7 },
-  { name: "青石矿道", from: 8, to: 15 },
-  { name: "铁脉深井", from: 16, to: 26 },
-  { name: "熔金洞穴", from: 27, to: 39 },
-  { name: "钻石地心", from: 40, to: Infinity },
-];
+const ZONES = ENVIRONMENTS;
 
 const STORY_CHAPTERS = [
   {
@@ -242,65 +226,21 @@ const PERKS = {
     icon: "♥",
     max: 4,
     prices: [100, 230, 460, 820],
-    effect: (level) => `探险体力 ${3 + level}`,
-  },
-  lantern: {
-    name: "寻宝矿灯",
-    icon: "✧",
-    max: 4,
-    prices: [130, 290, 540, 940],
-    effect: (level) => `宝箱金币 +${level * 15}%`,
+    effect: (level) => `探险体力 +${level}`,
   },
 };
 
-const ROUTES = [
-  {
-    id: "old-shaft",
-    name: "废弃矿道",
-    symbol: "▥",
-    color: "#c8df68",
-    unlockDepth: 2,
-    steps: 4,
-    danger: 1,
-    clearBonus: 28,
-    clearXp: 18,
-    description: "旧木架后藏着零散矿脉，适合第一次离开主矿井。",
-    materials: ["wood", "stone", "stone", "iron"],
-  },
-  {
-    id: "crystal-cave",
-    name: "水晶洞穴",
-    symbol: "◇",
-    color: "#72d8cf",
-    unlockDepth: 12,
-    steps: 6,
-    danger: 2,
-    clearBonus: 85,
-    clearXp: 42,
-    description: "潮湿洞壁闪着蓝光，珍贵矿石更多，塌方也更加频繁。",
-    materials: ["stone", "iron", "iron", "gold", "diamond"],
-  },
-  {
-    id: "lava-ruins",
-    name: "熔岩遗迹",
-    symbol: "▲",
-    color: "#e78548",
-    unlockDepth: 26,
-    steps: 8,
-    danger: 3,
-    clearBonus: 190,
-    clearXp: 85,
-    description: "热浪深处埋着古老矿藏，只有准备充分的矿工能全身而退。",
-    materials: ["iron", "gold", "gold", "diamond", "diamond"],
-  },
-];
+const defaultInventory = () => Object.fromEntries(
+  Object.keys(MATERIALS).map((type) => [type, 0])
+);
 
-const defaultInventory = () => ({
-  wood: 0,
-  stone: 0,
-  iron: 0,
-  gold: 0,
-  diamond: 0,
+const defaultCollectibles = () => Object.fromEntries(
+  Object.keys(COLLECTIBLES).map((type) => [type, 0])
+);
+
+const defaultDiscoveries = () => ({
+  materials: Object.fromEntries(Object.keys(MATERIALS).map((type) => [type, ["wood", "stone"].includes(type)])),
+  collectibles: Object.fromEntries(Object.keys(COLLECTIBLES).map((type) => [type, false])),
 });
 
 const defaultPerks = () => ({
@@ -322,7 +262,7 @@ const defaultVillage = () => Object.fromEntries(
 );
 
 const initialState = () => ({
-  saveVersion: 4,
+  saveVersion: 5,
   coins: 0,
   depth: 1,
   mined: 0,
@@ -336,6 +276,9 @@ const initialState = () => ({
   swordIndex: 0,
   equipment: defaultEquipment(),
   inventory: defaultInventory(),
+  collectibles: defaultCollectibles(),
+  discoveries: defaultDiscoveries(),
+  lanternLevel: 0,
   xp: 0,
   expeditionTickets: MAX_TICKETS,
   ticketMilestone: 0,
@@ -362,6 +305,8 @@ let state = loadGame();
 normalizeStoryState();
 normalizeAbyssState();
 normalizeDurabilityLevel();
+normalizeCollections();
+normalizeLanternLevel();
 normalizePickaxeDurability();
 normalizeAudioState();
 let audioContext;
@@ -373,6 +318,7 @@ let audioUnlocked = false;
 let audioPanelOpen = false;
 let toastTimer;
 let caveGame;
+let discoveryQueue = [];
 
 const dom = {
   coinCount: document.querySelector("#coinCount"),
@@ -398,6 +344,7 @@ const dom = {
   toolShop: document.querySelector("#toolShop"),
   durabilityShop: document.querySelector("#durabilityShop"),
   packShop: document.querySelector("#packShop"),
+  lanternShop: document.querySelector("#lanternShop"),
   swordShop: document.querySelector("#swordShop"),
   armorShop: document.querySelector("#armorShop"),
   perkShop: document.querySelector("#perkShop"),
@@ -450,8 +397,20 @@ const dom = {
   expeditionEvent: document.querySelector("#expeditionEvent"),
   expeditionStep: document.querySelector("#expeditionStep"),
   expeditionLoot: document.querySelector("#expeditionLoot"),
+  merchantPanel: document.querySelector("#merchantPanel"),
   retreatExpedition: document.querySelector("#retreatExpedition"),
   advanceExpedition: document.querySelector("#advanceExpedition"),
+  openCollection: document.querySelector("#openCollection"),
+  closeCollection: document.querySelector("#closeCollection"),
+  collectionProgress: document.querySelector("#collectionProgress"),
+  collectionModal: document.querySelector("#collectionModal"),
+  collectionSummary: document.querySelector("#collectionSummary"),
+  collectionGrid: document.querySelector("#collectionGrid"),
+  collectibleShelf: document.querySelector("#collectibleShelf"),
+  discoveryCard: document.querySelector("#discoveryCard"),
+  discoveryName: document.querySelector("#discoveryName"),
+  discoveryDescription: document.querySelector("#discoveryDescription"),
+  closeDiscovery: document.querySelector("#closeDiscovery"),
 };
 
 function loadGame() {
@@ -459,14 +418,31 @@ function loadGame() {
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
     if (!saved) return fresh;
+    const saveVersion = Number(saved.saveVersion) || 1;
+    const hadLegacyExpedition = saveVersion < 5 && Boolean(saved.expedition);
+    const legacyMaterials = saveVersion < 5
+      ? { wood: true, stone: true, iron: true, gold: true, diamond: true }
+      : {};
     return {
       ...fresh,
       ...saved,
       saveVersion: fresh.saveVersion,
-      durabilityLevel: (Number(saved.saveVersion) || 1) < 2
+      durabilityLevel: saveVersion < 2
         ? Number(saved.toolIndex) || 0
         : saved.durabilityLevel,
+      lanternLevel: saveVersion < 5
+        ? Number(saved.perks?.lantern) || 0
+        : saved.lanternLevel,
+      expedition: hadLegacyExpedition ? null : saved.expedition,
+      expeditionTickets: hadLegacyExpedition
+        ? Math.min(MAX_TICKETS, (Number(saved.expeditionTickets) || 0) + 1)
+        : saved.expeditionTickets,
       inventory: { ...fresh.inventory, ...saved.inventory },
+      collectibles: { ...fresh.collectibles, ...saved.collectibles },
+      discoveries: {
+        materials: { ...fresh.discoveries.materials, ...legacyMaterials, ...saved.discoveries?.materials },
+        collectibles: { ...fresh.discoveries.collectibles, ...saved.discoveries?.collectibles },
+      },
       perks: { ...fresh.perks, ...saved.perks },
       equipment: { ...fresh.equipment, ...saved.equipment },
       village: { ...fresh.village, ...saved.village },
@@ -524,6 +500,16 @@ function accessibleDepth() {
   return Math.min(state.depth, chapter?.maxDepth ?? state.depth);
 }
 
+function depthAccessIssue(depth) {
+  const environment = environmentForDepth(depth);
+  const gate = depthGateFor(depth);
+  const requiredToolIndex = Math.max(environment.requiredToolIndex, gate?.toolIndex || 0);
+  const requiredLanternLevel = Math.max(environment.requiredLanternLevel, gate?.lanternLevel || 0);
+  if (state.toolIndex < requiredToolIndex) return `需要先装备${TOOLS[requiredToolIndex].name}`;
+  if (state.lanternLevel < requiredLanternLevel) return `需要先安装${LANTERNS[requiredLanternLevel].name}`;
+  return "";
+}
+
 function formatRequirement(cost) {
   return Object.entries(cost)
     .map(([type, amount]) => type === "coins" ? `${amount} 金币` : `${MATERIALS[type].name} × ${amount}`)
@@ -538,6 +524,58 @@ function missingRequirement(cost) {
       : `${MATERIALS[type].name} ${amount - state.inventory[type]} 块`
     )
     .join("、");
+}
+
+function itemCost(item) {
+  return { coins: item.price, ...(item.recipe || {}) };
+}
+
+function consumeRequirement(cost) {
+  Object.entries(cost).forEach(([type, amount]) => {
+    if (type === "coins") state.coins -= amount;
+    else state.inventory[type] -= amount;
+  });
+}
+
+function normalizeCollections() {
+  state.inventory = { ...defaultInventory(), ...state.inventory };
+  state.collectibles = { ...defaultCollectibles(), ...state.collectibles };
+  state.discoveries = {
+    materials: { ...defaultDiscoveries().materials, ...state.discoveries?.materials },
+    collectibles: { ...defaultDiscoveries().collectibles, ...state.discoveries?.collectibles },
+  };
+}
+
+function normalizeLanternLevel() {
+  state.lanternLevel = Math.max(0, Math.min(LANTERNS.length - 1, Number(state.lanternLevel) || 0));
+}
+
+function queueDiscovery({ name, description }) {
+  discoveryQueue.push({ name, description });
+  renderDiscoveryCard();
+}
+
+function markMaterialDiscovered(type) {
+  const material = MATERIALS[type];
+  if (!material || state.discoveries.materials[type]) return false;
+  state.discoveries.materials[type] = true;
+  queueDiscovery({ name: material.name, description: `${material.description} 来源：${material.origin}。` });
+  return true;
+}
+
+function discoverCollectible(type) {
+  const collectible = COLLECTIBLES[type];
+  if (!collectible) return;
+  const firstDiscovery = !state.discoveries.collectibles[type];
+  state.collectibles[type] += 1;
+  state.discoveries.collectibles[type] = true;
+  if (firstDiscovery) {
+    queueDiscovery({ name: collectible.name, description: collectible.description });
+    logEvent(`猫窝收藏架新增了${collectible.name}。`);
+    return;
+  }
+  state.coins += collectible.reward;
+  showToast(`再次发现${collectible.name}，收藏家奖励 ${collectible.reward} 金币。`);
 }
 
 function maxPickaxeDurability() {
@@ -617,8 +655,8 @@ function addXp(amount) {
   }
 }
 
-function maxAdventureHealth() {
-  return 3 + state.perks.armor;
+function maxAdventureHealth(supplied = state.expedition?.supplied) {
+  return 8 + state.perks.armor + (supplied ? 2 : 0);
 }
 
 function routeById(routeId) {
@@ -697,6 +735,8 @@ function renderAll() {
   renderRepairStation();
   renderObjective();
   renderAdventure();
+  renderCollection();
+  renderDiscoveryCard();
   renderCaveHud();
 }
 
@@ -736,10 +776,11 @@ function renderInventory() {
   dom.sellAll.disabled = totalValue <= 0;
 
   dom.inventoryList.innerHTML = Object.entries(MATERIALS)
+    .filter(([type]) => state.discoveries.materials[type])
     .map(
       ([type, material]) => `
         <div class="inventory-item">
-          <i class="mini-block type-${type}" aria-hidden="true"></i>
+          <i class="mini-block" style="${miniBlockStyle(type)}" aria-hidden="true"></i>
           <span>${material.name}</span>
           <strong>${state.inventory[type]}</strong>
           <button
@@ -758,6 +799,11 @@ function renderInventory() {
   dom.toolDamage.textContent = tool.damage;
   dom.maxDurability.textContent = maxPickaxeDurability();
   renderEquipment();
+}
+
+function miniBlockStyle(type) {
+  const colors = MATERIALS[type]?.colors || MATERIALS.stone.colors;
+  return `--block-base:${colors[0]};--block-spark:${colors[1]};--block-shadow:${colors[2]}`;
 }
 
 function renderEquipment() {
@@ -911,20 +957,20 @@ function renderShop() {
       const owned = index <= state.toolIndex;
       const next = index === state.toolIndex + 1;
       const deepEnough = accessibleDepth() >= tool.depth;
-      const affordable = state.coins >= tool.price;
-      const label = owned ? "已拥有" : next && deepEnough ? `${tool.price} ¢` : `深度 ${tool.depth}m`;
+      const missing = missingRequirement(itemCost(tool));
+      const label = owned ? "已拥有" : !deepEnough ? `深度 ${tool.depth}m` : missing ? "材料不足" : `${tool.price} ¢`;
       return `
         <div class="shop-item">
           <span class="shop-item-icon" aria-hidden="true">⛏</span>
           <div class="shop-copy">
             <strong>${tool.name}</strong>
-            <small>挖掘力 ${tool.damage}</small>
+            <small>挖掘力 ${tool.damage}${tool.recipe ? ` · ${formatRequirement(tool.recipe)}` : ""}</small>
           </div>
           <button
             class="buy-button"
             type="button"
             data-buy-tool="${index}"
-            ${owned || !next || !deepEnough || !affordable ? "disabled" : ""}
+            ${owned || !next || !deepEnough || missing ? "disabled" : ""}
           >${label}</button>
         </div>
       `;
@@ -955,24 +1001,43 @@ function renderShop() {
       const index = offset + 1;
       const owned = index <= state.backpackIndex;
       const next = index === state.backpackIndex + 1;
-      const affordable = state.coins >= backpack.price;
+      const missing = missingRequirement(itemCost(backpack));
       return `
         <div class="shop-item">
           <span class="shop-item-icon pack-icon" aria-hidden="true">▣</span>
           <div class="shop-copy">
             <strong>${backpack.name}</strong>
-            <small>容量 ${backpack.capacity}</small>
+            <small>容量 ${backpack.capacity}${backpack.recipe ? ` · ${formatRequirement(backpack.recipe)}` : ""}</small>
           </div>
           <button
             class="buy-button"
             type="button"
             data-buy-pack="${index}"
-            ${owned || !next || !affordable ? "disabled" : ""}
-          >${owned ? "已拥有" : `${backpack.price} ¢`}</button>
+            ${owned || !next || missing ? "disabled" : ""}
+          >${owned ? "已拥有" : missing ? "材料不足" : `${backpack.price} ¢`}</button>
         </div>
       `;
     })
     .join("");
+
+  const lantern = LANTERNS[state.lanternLevel];
+  const nextLantern = LANTERNS[state.lanternLevel + 1];
+  const lanternMissing = nextLantern ? missingRequirement(itemCost(nextLantern)) : "";
+  dom.lanternShop.innerHTML = `
+    <div class="shop-item">
+      <span class="shop-item-icon perk-icon" aria-hidden="true">✧</span>
+      <div class="shop-copy">
+        <strong>${lantern.name} <i>Lv.${state.lanternLevel}</i></strong>
+        <small>收藏概率 +${Math.round(lantern.rareBonus * 100)}%${nextLantern?.recipe ? ` · 下级需要 ${formatRequirement(nextLantern.recipe)}` : " · 已达顶级"}</small>
+      </div>
+      <button
+        class="buy-button"
+        type="button"
+        data-buy-lantern="${state.lanternLevel + 1}"
+        ${!nextLantern || lanternMissing ? "disabled" : ""}
+      >${nextLantern ? lanternMissing ? "材料不足" : `${nextLantern.price} ¢` : "已满级"}</button>
+    </div>
+  `;
 
   const sword = currentSword();
   const nextSword = SWORDS[state.swordIndex + 1];
@@ -1056,7 +1121,7 @@ function renderAdventure() {
   dom.expeditionScreen.classList.remove("hidden");
   dom.expeditionRouteName.textContent = route.name;
   dom.expeditionHealth.textContent = Array.from(
-    { length: maxAdventureHealth() },
+    { length: maxAdventureHealth(expedition.supplied) },
     (_, index) => (index < expedition.hp ? "♥" : "♡")
   ).join(" ");
   dom.expeditionPath.style.setProperty("--path-steps", route.steps);
@@ -1068,15 +1133,17 @@ function renderAdventure() {
   dom.expeditionEvent.textContent = expedition.lastEvent;
   dom.expeditionStep.textContent = `${expedition.step} / ${route.steps} 步`;
   dom.advanceExpedition.textContent = expedition.completed ? "领取终点奖励" : "向前探索";
+  dom.advanceExpedition.disabled = Boolean(expedition.pendingMerchant);
   dom.retreatExpedition.textContent = expedition.completed ? "稍后领取" : "撤离并带走战利品";
+  renderMerchant();
   renderExpeditionLoot();
 }
 
 function renderRoutes() {
   dom.routeList.innerHTML = ROUTES.map((route) => {
-    const unlocked = accessibleDepth() >= route.unlockDepth;
+    const lockReason = routeLockReason(route);
+    const unlocked = !lockReason;
     const hasTicket = state.expeditionTickets > 0;
-    const label = unlocked ? (hasTicket ? "开始探险" : "探险券不足") : `${route.unlockDepth}m 解锁`;
     return `
       <article class="route-card ${unlocked ? "" : "locked"}" style="--route-color: ${route.color}">
         <span class="route-symbol" aria-hidden="true">${route.symbol}</span>
@@ -1086,15 +1153,50 @@ function renderRoutes() {
           <span>${route.steps} 步路线</span>
           <span>风险 ${"◆".repeat(route.danger)}</span>
         </div>
-        <button
-          class="buy-button"
-          type="button"
-          data-start-route="${route.id}"
-          ${!unlocked || !hasTicket ? "disabled" : ""}
-        >${label}</button>
+        <div class="route-actions">
+          <button class="buy-button" type="button" data-start-route="${route.id}" ${!unlocked ? "disabled" : ""}>
+            ${unlocked ? "免费出发" : lockReason}
+          </button>
+          <button class="secondary-button ticket-button" type="button" data-start-route="${route.id}" data-use-ticket="true" ${!unlocked || !hasTicket ? "disabled" : ""}>
+            ${hasTicket ? "探险券补给 · 体力 +2" : "探险券不足"}
+          </button>
+        </div>
       </article>
     `;
   }).join("");
+}
+
+function routeLockReason(route) {
+  if (accessibleDepth() < route.unlockDepth) return `${route.unlockDepth}m 解锁`;
+  if (state.toolIndex < route.requiredToolIndex) return `需要${TOOLS[route.requiredToolIndex].name}`;
+  if (state.lanternLevel < route.requiredLanternLevel) return `需要${LANTERNS[route.requiredLanternLevel].name}`;
+  return "";
+}
+
+function renderMerchant() {
+  const merchant = state.expedition?.pendingMerchant;
+  dom.merchantPanel.classList.toggle("hidden", !merchant);
+  if (!merchant) {
+    dom.merchantPanel.innerHTML = "";
+    return;
+  }
+
+  dom.merchantPanel.innerHTML = `
+    <div>
+      <p class="eyebrow">UNDERGROUND MERCHANT</p>
+      <h3>地下商人的临时摊位</h3>
+      <small>金币会立即支付，购买的矿物会放入本局战利品袋。</small>
+    </div>
+    <div class="merchant-actions">
+      <button class="buy-button" type="button" data-merchant-action="rest" ${state.coins < merchant.restCost ? "disabled" : ""}>
+        热汤休息 · ${merchant.restCost} ¢ · 体力 +2
+      </button>
+      <button class="buy-button" type="button" data-merchant-action="buy" ${state.coins < merchant.materialCost ? "disabled" : ""}>
+        购买${MATERIALS[merchant.material].name} · ${merchant.materialCost} ¢
+      </button>
+      <button class="secondary-button" type="button" data-merchant-action="skip">礼貌离开</button>
+    </div>
+  `;
 }
 
 function renderExpeditionLoot() {
@@ -1105,7 +1207,7 @@ function renderExpeditionLoot() {
     .filter(([, amount]) => amount > 0)
     .map(([type, amount]) => `
       <span class="loot-item">
-        <i class="mini-block type-${type}" aria-hidden="true"></i>
+        <i class="mini-block" style="${miniBlockStyle(type)}" aria-hidden="true"></i>
         ${MATERIALS[type].name} × ${amount}
       </span>
     `);
@@ -1117,6 +1219,52 @@ function renderExpeditionLoot() {
   dom.expeditionLoot.innerHTML = materials.length
     ? materials.join("")
     : '<span class="loot-item">矿灯旁还是空的，继续向前探索。</span>';
+}
+
+function renderCollection() {
+  const materialDiscoveries = Object.values(state.discoveries.materials).filter(Boolean).length;
+  const collectibleDiscoveries = Object.values(state.discoveries.collectibles).filter(Boolean).length;
+  const totalDiscoveries = materialDiscoveries + collectibleDiscoveries;
+  const totalEntries = Object.keys(MATERIALS).length + Object.keys(COLLECTIBLES).length;
+  dom.collectionProgress.textContent = totalDiscoveries;
+  dom.collectionSummary.innerHTML = `
+    <strong>${totalDiscoveries} / ${totalEntries}</strong>
+    <span>项矿洞发现已收入图鉴</span>
+    <small>新矿物会补充图鉴，稀有收藏品会陈列在猫窝里。</small>
+  `;
+  dom.collectionGrid.innerHTML = Object.entries(MATERIALS).map(([type, material]) => {
+    const discovered = state.discoveries.materials[type];
+    return `
+      <article class="collection-entry ${discovered ? "" : "unknown"}">
+        <i class="mini-block" style="${miniBlockStyle(type)}" aria-hidden="true"></i>
+        <div>
+          <strong>${discovered ? material.name : "未发现矿物"}</strong>
+          <small>${discovered ? `${material.origin} · ${material.description}` : "继续深入矿洞，留意新的方块颜色。"}</small>
+        </div>
+      </article>
+    `;
+  }).join("");
+  dom.collectibleShelf.innerHTML = Object.entries(COLLECTIBLES).map(([type, collectible]) => {
+    const discovered = state.discoveries.collectibles[type];
+    return `
+      <article class="shelf-slot ${discovered ? "" : "unknown"}">
+        <span aria-hidden="true">${discovered ? collectible.symbol : "?"}</span>
+        <strong>${discovered ? collectible.name : "空置展位"}</strong>
+        <small>${discovered ? `收藏数量 × ${state.collectibles[type]}` : "宝箱中可能藏着惊喜"}</small>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderDiscoveryCard() {
+  if (!discoveryQueue.length) {
+    dom.discoveryCard.classList.add("hidden");
+    return;
+  }
+  const discovery = discoveryQueue[0];
+  dom.discoveryName.textContent = discovery.name;
+  dom.discoveryDescription.textContent = discovery.description;
+  dom.discoveryCard.classList.remove("hidden");
 }
 
 function renderObjective() {
@@ -1202,13 +1350,15 @@ function sellMaterial(type) {
 function buyTool(index) {
   const tool = TOOLS[index];
   if (!tool || index !== state.toolIndex + 1 || accessibleDepth() < tool.depth) return;
-  if (state.coins < tool.price) {
-    showToast(`还差 ${tool.price - state.coins} 金币才能购买${tool.name}。`);
+  const cost = itemCost(tool);
+  const missing = missingRequirement(cost);
+  if (missing) {
+    showToast(`购买${tool.name}还缺：${missing}。`);
     playTone("error");
     return;
   }
 
-  state.coins -= tool.price;
+  consumeRequirement(cost);
   state.toolIndex = index;
   showToast(`装备成功：${tool.name}，挖掘力提升到 ${tool.damage}。当前耐久保持不变。`);
   logEvent(`商店送来了${tool.name}，坚硬矿层也能轻松处理。`);
@@ -1238,16 +1388,39 @@ function buyDurabilityUpgrade(index) {
 function buyBackpack(index) {
   const backpack = BACKPACKS[index];
   if (!backpack || index !== state.backpackIndex + 1) return;
-  if (state.coins < backpack.price) {
-    showToast(`还差 ${backpack.price - state.coins} 金币才能购买${backpack.name}。`);
+  const cost = itemCost(backpack);
+  const missing = missingRequirement(cost);
+  if (missing) {
+    showToast(`购买${backpack.name}还缺：${missing}。`);
     playTone("error");
     return;
   }
 
-  state.coins -= backpack.price;
+  consumeRequirement(cost);
   state.backpackIndex = index;
   showToast(`背包升级为${backpack.name}，容量提升到 ${backpack.capacity}。`);
   logEvent(`新背包到货，可以在矿洞里多待一会儿了。`);
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+}
+
+function buyLantern(index) {
+  const lantern = LANTERNS[index];
+  if (!lantern || index !== state.lanternLevel + 1) return;
+  const cost = itemCost(lantern);
+  const missing = missingRequirement(cost);
+  if (missing) {
+    showToast(`安装${lantern.name}还缺：${missing}。`);
+    playTone("error");
+    return;
+  }
+
+  consumeRequirement(cost);
+  state.lanternLevel = index;
+  state.perks.lantern = index;
+  showToast(`${lantern.name}安装完成，更深区域和稀有发现已经开放。`);
+  logEvent(`矿灯改装完成：${lantern.name}正在照亮新的岔路。`);
   playTone("upgrade");
   renderAll();
   saveGame();
@@ -1302,6 +1475,7 @@ function collectCaveMaterial({ type }) {
   const luckyDrop = Math.random() < fortuneChance();
   const amount = Math.min(luckyDrop ? 2 : 1, backpack.capacity - inventoryTotal());
   state.inventory[type] += amount;
+  markMaterialDiscovered(type);
   state.pickaxeDurability = Math.max(0, state.pickaxeDurability - 1);
   state.mined += 1;
   addXp(2);
@@ -1331,7 +1505,16 @@ function descendCaveLayer() {
     return { advanced: false, message };
   }
 
-  state.depth += 1;
+  const targetDepth = state.depth + 1;
+  const accessIssue = depthAccessIssue(targetDepth);
+  if (accessIssue) {
+    const message = `${targetDepth}m 的矿层过于危险：${accessIssue}。`;
+    showToast(message);
+    playTone("error");
+    return { advanced: false, message };
+  }
+
+  state.depth = targetDepth;
   addXp(4);
   const zone = currentZone();
   showToast(`下潜成功：抵达 ${state.depth}m ${zone.name}。`);
@@ -1570,6 +1753,7 @@ function createCaveGame() {
         swordQuality: sword.quality,
         repairCost: repairPickaxeCost(),
         toolDamage: TOOLS[state.toolIndex].damage,
+        toolIndex: state.toolIndex,
       };
     },
     onDescend: descendCaveLayer,
@@ -1614,24 +1798,43 @@ function closeAdventure() {
   dom.adventureModal.classList.add("hidden");
 }
 
-function startExpedition(routeId) {
+function openCollection() {
+  dom.collectionModal.classList.remove("hidden");
+  renderCollection();
+}
+
+function closeCollection() {
+  dom.collectionModal.classList.add("hidden");
+}
+
+function closeDiscovery() {
+  discoveryQueue.shift();
+  dom.discoveryCard.classList.add("hidden");
+  renderDiscoveryCard();
+}
+
+function startExpedition(routeId, supplied = false) {
   const route = routeById(routeId);
-  if (!route || state.expedition || accessibleDepth() < route.unlockDepth) return;
-  if (state.expeditionTickets < 1) {
-    showToast("探险券不足，每挖 12 个方块可以恢复 1 张。");
+  if (!route || state.expedition || routeLockReason(route)) return;
+  if (supplied && state.expeditionTickets < 1) {
+    showToast("探险券不足，每挖 12 个方块可以恢复 1 张。免费出发仍然可用。");
     return;
   }
 
-  state.expeditionTickets -= 1;
+  if (supplied) state.expeditionTickets -= 1;
   state.expedition = {
     routeId,
     step: 0,
-    hp: maxAdventureHealth(),
+    hp: maxAdventureHealth(supplied),
+    supplied,
     loot: defaultInventory(),
     coins: 0,
     xp: 0,
     completed: false,
-    lastEvent: "小猫握紧矿灯，准备迈出第一步。",
+    pendingMerchant: null,
+    lastEvent: supplied
+      ? "探险券换来了额外补给。小猫握紧矿灯，准备迈出第一步。"
+      : "小猫轻装出发，握紧矿灯准备迈出第一步。",
   };
   logEvent(`探险队进入${route.name}，矿灯在黑暗中摇晃。`);
   playTone("upgrade");
@@ -1640,12 +1843,13 @@ function startExpedition(routeId) {
 }
 
 function chooseExpeditionMaterial(route) {
-  return route.materials[Math.floor(Math.random() * route.materials.length)];
+  return weightedMaterial(route.weights, state.toolIndex);
 }
 
 function advanceExpedition() {
   const expedition = state.expedition;
   if (!expedition) return;
+  if (expedition.pendingMerchant) return;
   if (expedition.completed) {
     finishExpedition(true);
     return;
@@ -1653,39 +1857,49 @@ function advanceExpedition() {
 
   const route = routeById(expedition.routeId);
   const roll = Math.random();
+  const lantern = LANTERNS[state.lanternLevel];
   expedition.step += 1;
+  expedition.hp = Math.max(0, expedition.hp - 1);
   expedition.xp += 4 + route.danger * 2;
 
-  if (roll < 0.43) {
+  const veinThreshold = EXPEDITION_EVENT_WEIGHTS.vein / 100;
+  const chestThreshold = veinThreshold + EXPEDITION_EVENT_WEIGHTS.chest / 100 + lantern.chestBonus;
+  const collapseThreshold = chestThreshold + EXPEDITION_EVENT_WEIGHTS.collapse / 100;
+
+  if (roll < veinThreshold) {
     const type = chooseExpeditionMaterial(route);
     const amount = Math.random() < 0.14 + state.perks.fortune * 0.04 ? 2 : 1;
     expedition.loot[type] += amount;
+    markMaterialDiscovered(type);
     expedition.lastEvent = `发现一处隐蔽矿脉，猫猫收进了 ${amount} 块${MATERIALS[type].name}。`;
     playTone(type === "diamond" ? "diamond" : "break");
-  } else if (roll < 0.65) {
-    const coins = Math.round(randomBetween(9, 18) * route.danger * (1 + state.perks.lantern * 0.15));
+  } else if (roll < chestThreshold) {
+    const type = chooseExpeditionMaterial(route);
+    const amount = Math.random() < 0.36 ? 2 : 1;
+    const coins = Math.round(randomBetween(12, 22) * route.danger * (1 + lantern.chestBonus));
+    expedition.loot[type] += amount;
     expedition.coins += coins;
-    expedition.lastEvent = `矿灯照见旧木箱，里面藏着 ${coins} 枚金币。`;
+    markMaterialDiscovered(type);
+    expedition.lastEvent = `矿灯照见旧木箱，里面藏着 ${amount} 块${MATERIALS[type].name}和 ${coins} 枚金币。`;
+    if (Math.random() < 0.08 + lantern.rareBonus) {
+      const collectibleType = Object.keys(COLLECTIBLES)[Math.floor(Math.random() * Object.keys(COLLECTIBLES).length)];
+      discoverCollectible(collectibleType);
+      expedition.lastEvent += ` 还发现了${COLLECTIBLES[collectibleType].name}！`;
+    }
     playTone("coin");
-  } else if (roll < 0.83) {
-    const damage = randomBetween(1, route.danger);
-    expedition.hp = Math.max(0, expedition.hp - damage);
-    expedition.lastEvent = `碎石忽然坠落，猫猫躲闪不及，损失了 ${damage} 点体力。`;
+  } else if (roll < collapseThreshold) {
+    expedition.hp = Math.max(0, expedition.hp - 1);
+    expedition.lastEvent = "碎石忽然坠落，除了前进消耗外又损失了 1 点体力。";
     playTone("error");
-  } else if (roll < 0.94) {
-    const oldHp = expedition.hp;
-    expedition.hp = Math.min(maxAdventureHealth(), expedition.hp + 1);
-    expedition.lastEvent = expedition.hp > oldHp
-      ? "发现安全的旧营地，猫猫休息片刻，恢复了 1 点体力。"
-      : "发现安全的旧营地，不过猫猫精神正好，继续前进。";
-    playTone("upgrade");
   } else {
-    const type = route.materials[route.materials.length - 1];
-    const coins = Math.round(12 * route.danger * (1 + state.perks.lantern * 0.15));
-    expedition.loot[type] += 1;
-    expedition.coins += coins;
-    expedition.lastEvent = `矿灯闪出隐藏记号！猫猫找到 1 块${MATERIALS[type].name}和 ${coins} 枚金币。`;
-    playTone("diamond");
+    const material = route.rareMaterial;
+    expedition.pendingMerchant = {
+      restCost: 14 + route.danger * 12,
+      material,
+      materialCost: MATERIALS[material].value * 3,
+    };
+    expedition.lastEvent = "岔路尽头亮起一盏小灯。地下商人摆出了热汤和稀有矿物，等待你的选择。";
+    playTone("upgrade");
   }
 
   if (expedition.hp <= 0) {
@@ -1694,13 +1908,36 @@ function advanceExpedition() {
   }
 
   if (expedition.step >= route.steps) {
-    const bonus = Math.round(route.clearBonus * (1 + state.perks.lantern * 0.15));
+    const bonus = Math.round(route.clearBonus * (1 + lantern.chestBonus));
     expedition.coins += bonus;
     expedition.xp += route.clearXp;
     expedition.completed = true;
     expedition.lastEvent += ` 终点已抵达，额外发现 ${bonus} 枚金币。`;
   }
 
+  renderAll();
+  saveGame();
+}
+
+function resolveMerchant(action) {
+  const expedition = state.expedition;
+  const merchant = expedition?.pendingMerchant;
+  if (!expedition || !merchant) return;
+  if (action === "rest") {
+    if (state.coins < merchant.restCost) return;
+    state.coins -= merchant.restCost;
+    expedition.hp = Math.min(maxAdventureHealth(expedition.supplied), expedition.hp + 2);
+    expedition.lastEvent = `地下商人的热汤恢复了 2 点体力，猫猫重新握紧了矿灯。`;
+  } else if (action === "buy") {
+    if (state.coins < merchant.materialCost) return;
+    state.coins -= merchant.materialCost;
+    expedition.loot[merchant.material] += 1;
+    markMaterialDiscovered(merchant.material);
+    expedition.lastEvent = `地下商人收下金币，把 1 块${MATERIALS[merchant.material].name}放进了战利品袋。`;
+  } else {
+    expedition.lastEvent = "猫猫向地下商人挥挥手，把金币留给了更重要的升级。";
+  }
+  expedition.pendingMerchant = null;
   renderAll();
   saveGame();
 }
@@ -1718,6 +1955,7 @@ function finishExpedition(completed) {
     const kept = Math.min(room, amount);
     const overflow = amount - kept;
     state.inventory[type] += kept;
+    if (kept > 0) markMaterialDiscovered(type);
     stored += kept;
     overflowCoins += overflow * MATERIALS[type].value;
   });
@@ -1969,7 +2207,10 @@ function resetGame() {
 
   state = initialState();
   normalizeDurabilityLevel();
+  normalizeCollections();
+  normalizeLanternLevel();
   normalizePickaxeDurability();
+  discoveryQueue = [];
   state.tutorialSeen = true;
   if (caveGame) {
     caveGame.generateWorld();
@@ -2013,6 +2254,11 @@ dom.packShop.addEventListener("click", (event) => {
   if (button) buyBackpack(Number(button.dataset.buyPack));
 });
 
+dom.lanternShop.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-buy-lantern]");
+  if (button) buyLantern(Number(button.dataset.buyLantern));
+});
+
 dom.swordShop.addEventListener("click", (event) => {
   const button = event.target.closest("[data-convert-sword]");
   if (button) convertSword(Number(button.dataset.convertSword));
@@ -2047,10 +2293,17 @@ dom.openAdventure.addEventListener("click", openAdventure);
 dom.closeAdventure.addEventListener("click", closeAdventure);
 dom.routeList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-start-route]");
-  if (button) startExpedition(button.dataset.startRoute);
+  if (button) startExpedition(button.dataset.startRoute, button.dataset.useTicket === "true");
+});
+dom.merchantPanel.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-merchant-action]");
+  if (button) resolveMerchant(button.dataset.merchantAction);
 });
 dom.advanceExpedition.addEventListener("click", advanceExpedition);
 dom.retreatExpedition.addEventListener("click", retreatExpedition);
+dom.openCollection.addEventListener("click", openCollection);
+dom.closeCollection.addEventListener("click", closeCollection);
+dom.closeDiscovery.addEventListener("click", closeDiscovery);
 
 dom.startGame.addEventListener("click", () => {
   state.tutorialSeen = true;
@@ -2064,6 +2317,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key.toLowerCase() === "s") sellInventory();
   if (event.key.toLowerCase() === "m") toggleAudioMute();
   if (event.key === "Escape" && audioPanelOpen) closeAudioSettings();
+  if (event.key === "Escape") closeCollection();
 });
 
 document.addEventListener("click", (event) => {

@@ -1,6 +1,7 @@
 "use strict";
 
 (function attachCaveGame() {
+  const { MATERIALS, environmentForDepth, weightedMaterial } = window.KittyGameData;
   const TILE = 32;
   const WORLD_COLUMNS = 112;
   const WORLD_ROWS = 17;
@@ -8,13 +9,9 @@
   const PLAYER_WIDTH = 24;
   const PLAYER_HEIGHT = 42;
 
-  const BLOCK_COLORS = {
-    wood: ["#a7713e", "#704724", "#d29958"],
-    stone: ["#718078", "#4d5b56", "#9aa49f"],
-    iron: ["#929b94", "#d5baa0", "#66736e"],
-    gold: ["#77786a", "#ffe06a", "#555f59"],
-    diamond: ["#668384", "#70e6dd", "#465e60"],
-  };
+  const BLOCK_COLORS = Object.fromEntries(
+    Object.entries(MATERIALS).map(([type, material]) => [type, material.colors])
+  );
 
   const ENEMY_TYPES = [
     { name: "洞穴史莱姆", color: "#779743", hp: 8, damage: 1, reward: 12, xp: 8 },
@@ -221,18 +218,14 @@
     }
 
     pickBlockType(column, row, depth) {
-      const richness = depth + Math.floor(column / 10) + Math.max(0, FLOOR_ROW - row) * 2;
-      const roll = Math.random() * 100;
-      if (richness >= 24 && roll < Math.min(8, richness * 0.14)) return "diamond";
-      if (richness >= 14 && roll < Math.min(18, 4 + richness * 0.38)) return "gold";
-      if (richness >= 6 && roll < Math.min(36, 14 + richness * 0.62)) return "iron";
-      if (roll < 76) return "stone";
-      return "wood";
+      const richness = depth + Math.floor(column / 18) + Math.max(0, FLOOR_ROW - row);
+      const environment = environmentForDepth(richness);
+      return weightedMaterial(environment.weights, this.getConfig().toolIndex || 0);
     }
 
     addBlock(column, row, type) {
       if (this.blocks.some((block) => block.column === column && block.row === row && !block.gone)) return;
-      const hp = { wood: 1, stone: 2, iron: 4, gold: 5, diamond: 7 }[type];
+      const hp = MATERIALS[type]?.hp || MATERIALS.stone.hp;
       this.blocks.push({
         column,
         row,

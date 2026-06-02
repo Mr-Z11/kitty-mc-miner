@@ -9,6 +9,7 @@
     />
     <title>小猫挖矿 MC 版</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./game-data.js"></script>
     <script defer src="./cave-game.js"></script>
     <script defer src="./game.js"></script>
   </head>
@@ -176,6 +177,11 @@
             <div class="village-structures" id="villageStructures"></div>
             <div class="village-action" id="villageAction"></div>
           </section>
+
+          <button class="collection-trigger" id="openCollection" type="button">
+            <span class="collection-trigger-icon" aria-hidden="true">⌂</span>
+            <span><b>图鉴与猫窝</b><small><i id="collectionProgress">2</i> / 14 项发现</small></span>
+          </button>
         </aside>
 
         <section class="mine-panel">
@@ -263,7 +269,7 @@
               </button>
               <button class="adventure-trigger" id="openAdventure" type="button">
                 <span class="adventure-trigger-icon">⚑</span>
-                <span><b>探险模式</b><small><i id="ticketCount">3</i> / 3 探险券</small></span>
+                <span><b>短局探险</b><small>免费出发 · <i id="ticketCount">3</i> 张券可选补给</small></span>
               </button>
             </div>
           </div>
@@ -300,6 +306,14 @@
               <small>装得更多</small>
             </div>
             <div class="shop-list" id="packShop"></div>
+          </section>
+
+          <section class="shop-section workshop-section">
+            <div class="section-title">
+              <h3>矿灯改装</h3>
+              <small>照亮深层，提高稀有发现</small>
+            </div>
+            <div class="shop-list" id="lanternShop"></div>
           </section>
 
           <section class="shop-section workshop-section">
@@ -360,7 +374,7 @@
 
         <section class="route-select" id="routeSelect">
           <div class="adventure-intro">
-            <p>带上矿灯，选择一条路线。每次探险消耗 1 张探险券，途中可以随时撤离并保留战利品。</p>
+            <p>带上矿灯，选择一条路线。每次行动消耗 1 点体力，途中可以随时撤离并保留战利品。探险券不再是门票，可选择消耗 1 张换取额外体力。</p>
             <strong><span id="modalTicketCount">3</span> / 3 探险券</strong>
           </div>
           <div class="route-list" id="routeList"></div>
@@ -386,6 +400,8 @@
             <p id="expeditionEvent">小猫握紧矿灯，准备迈出第一步。</p>
           </div>
 
+          <div class="merchant-panel hidden" id="merchantPanel"></div>
+
           <div class="expedition-loot">
             <div class="section-title">
               <h3>临时战利品袋</h3>
@@ -400,6 +416,36 @@
           </div>
         </section>
       </div>
+    </div>
+
+    <div class="collection-modal hidden" id="collectionModal" role="dialog" aria-modal="true" aria-labelledby="collectionTitle">
+      <div class="collection-card">
+        <header class="adventure-header">
+          <div>
+            <p class="eyebrow">CAT HOME ARCHIVE</p>
+            <h2 id="collectionTitle">图鉴与猫窝</h2>
+          </div>
+          <button class="square-button" id="closeCollection" type="button" aria-label="关闭图鉴与猫窝">×</button>
+        </header>
+        <section class="collection-content">
+          <div class="collection-summary" id="collectionSummary"></div>
+          <div class="collection-grid" id="collectionGrid"></div>
+          <div class="cat-home">
+            <div>
+              <p class="eyebrow">COLLECTIBLE SHELF</p>
+              <h3>猫窝收藏架</h3>
+            </div>
+            <div class="collectible-shelf" id="collectibleShelf"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="discovery-card hidden" id="discoveryCard" role="status" aria-live="polite">
+      <small>NEW DISCOVERY</small>
+      <strong id="discoveryName">发现新矿物</strong>
+      <p id="discoveryDescription"></p>
+      <button class="buy-button" id="closeDiscovery" type="button">收入图鉴</button>
     </div>
 
     <div class="intro-modal" id="introModal" role="dialog" aria-modal="true" aria-labelledby="introTitle">

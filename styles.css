@@ -634,7 +634,10 @@ h3 {
   width: 26px;
   height: 26px;
   border: 2px solid rgba(10, 17, 15, 0.6);
-  box-shadow: inset -5px -5px 0 rgba(0, 0, 0, 0.18);
+  background:
+    radial-gradient(circle, var(--block-spark, #c8d2cc) 0 22%, transparent 24%) 2px 2px / 17px 17px,
+    var(--block-base, #718078);
+  box-shadow: inset -5px -5px 0 var(--block-shadow, rgba(0, 0, 0, 0.18));
 }
 
 .primary-button {
@@ -2162,6 +2165,306 @@ kbd {
   filter: brightness(1.12);
 }
 
+.secondary-button:disabled {
+  cursor: not-allowed;
+  color: #819087;
+  background: #35463f;
+  box-shadow: none;
+  filter: none;
+}
+
+.collection-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 10px;
+  cursor: pointer;
+  color: #f6e6bc;
+  text-align: left;
+  border: 2px solid #7c693c;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%) 0 0 / 9px 9px,
+    #5b5438;
+  box-shadow: 3px 3px #0b1511, inset -4px -4px rgba(34, 27, 16, 0.28);
+  transition: 120ms ease;
+}
+
+.collection-trigger:hover {
+  filter: brightness(1.14);
+  transform: translate(-1px, -1px);
+}
+
+.collection-trigger-icon {
+  color: #ffe084;
+  font-size: 24px;
+}
+
+.collection-trigger b,
+.collection-trigger small {
+  display: block;
+}
+
+.collection-trigger b {
+  font-size: 11px;
+}
+
+.collection-trigger small {
+  margin-top: 4px;
+  color: #d6c695;
+  font-size: 8px;
+}
+
+.collection-trigger i {
+  color: #fff0a2;
+  font-style: normal;
+}
+
+.route-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.route-card .ticket-button {
+  min-height: 27px;
+  padding: 6px;
+  font-size: 8px;
+}
+
+.merchant-panel {
+  display: grid;
+  grid-template-columns: 1fr minmax(250px, 1.15fr);
+  gap: 11px;
+  margin-top: 12px;
+  padding: 11px;
+  border: 2px solid #8b6a3c;
+  background:
+    linear-gradient(135deg, rgba(255, 225, 143, 0.08) 25%, transparent 25%) 0 0 / 12px 12px,
+    #4b3d2c;
+  box-shadow: inset -5px -5px rgba(35, 24, 16, 0.24);
+}
+
+.merchant-panel.hidden,
+.collection-modal.hidden,
+.discovery-card.hidden {
+  display: none;
+}
+
+.merchant-panel h3 {
+  color: #ffe29b;
+}
+
+.merchant-panel small {
+  display: block;
+  margin-top: 6px;
+  color: #d9c49d;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.merchant-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.merchant-actions .buy-button,
+.merchant-actions .secondary-button {
+  min-height: 28px;
+  padding: 7px;
+  font-size: 8px;
+}
+
+.collection-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(5, 12, 10, 0.84);
+  backdrop-filter: blur(6px);
+}
+
+.collection-card {
+  width: min(920px, 100%);
+  max-height: min(900px, calc(100vh - 32px));
+  overflow-y: auto;
+  border: 4px solid #0b1511;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%) 0 0 / 12px 12px,
+    #2a4138;
+  box-shadow: 8px 8px #07100d;
+}
+
+.collection-content {
+  padding: 15px;
+}
+
+.collection-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 11px;
+  align-items: center;
+  padding: 11px;
+  color: #c9d7c7;
+  border: 2px solid #15251f;
+  background: rgba(9, 17, 14, 0.32);
+}
+
+.collection-summary strong {
+  grid-row: span 2;
+  color: #ffe28c;
+  font-size: 28px;
+}
+
+.collection-summary span {
+  color: #f4e7c4;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.collection-summary small {
+  color: #a9baad;
+  font-size: 9px;
+}
+
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.collection-entry {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 2px solid #1a3028;
+  background: #354f45;
+}
+
+.collection-entry strong,
+.collection-entry small {
+  display: block;
+}
+
+.collection-entry strong {
+  color: #fff0c5;
+  font-size: 11px;
+}
+
+.collection-entry small {
+  margin-top: 5px;
+  color: #b4c7ba;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.collection-entry.unknown {
+  filter: saturate(0.25);
+  opacity: 0.58;
+}
+
+.cat-home {
+  margin-top: 14px;
+  padding: 12px;
+  border: 3px solid #30291c;
+  background:
+    linear-gradient(0deg, rgba(99, 67, 40, 0.44), rgba(99, 67, 40, 0.44)) 0 100% / 100% 22px no-repeat,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 50%, transparent 50%) 0 0 / 12px 12px,
+    #554634;
+}
+
+.cat-home h3 {
+  color: #ffe1a2;
+}
+
+.collectible-shelf {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.shelf-slot {
+  display: grid;
+  min-height: 112px;
+  place-items: center;
+  padding: 9px;
+  text-align: center;
+  border: 2px solid #392918;
+  background: rgba(31, 23, 16, 0.36);
+}
+
+.shelf-slot span {
+  color: #ffdc7a;
+  font-size: 28px;
+  text-shadow: 2px 2px #26190f;
+}
+
+.shelf-slot strong {
+  color: #fce7bd;
+  font-size: 10px;
+}
+
+.shelf-slot small {
+  color: #cfb994;
+  font-size: 8px;
+}
+
+.shelf-slot.unknown {
+  opacity: 0.54;
+}
+
+.discovery-card {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 60;
+  width: min(320px, calc(100% - 30px));
+  padding: 14px;
+  border: 3px solid #342718;
+  background:
+    linear-gradient(135deg, rgba(255, 240, 164, 0.16) 25%, transparent 25%) 0 0 / 10px 10px,
+    #665039;
+  box-shadow: 6px 6px #07100d;
+  animation: discovery-arrive 240ms steps(3);
+}
+
+.discovery-card small,
+.discovery-card strong,
+.discovery-card p {
+  display: block;
+}
+
+.discovery-card small {
+  color: #d2f070;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.discovery-card strong {
+  margin-top: 7px;
+  color: #fff0bb;
+  font-size: 17px;
+}
+
+.discovery-card p {
+  margin: 7px 0 11px;
+  color: #ecd8b1;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+@keyframes discovery-arrive {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 .toast {
   position: fixed;
   top: 104px;
@@ -2567,7 +2870,8 @@ kbd {
     padding: 9px;
   }
 
-  .adventure-card {
+  .adventure-card,
+  .collection-card {
     max-height: calc(100vh - 18px);
   }
 
@@ -2590,6 +2894,40 @@ kbd {
   .adventure-intro strong {
     display: inline-block;
     margin-top: 8px;
+  }
+
+  .merchant-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-modal {
+    padding: 9px;
+  }
+
+  .collection-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-entry {
+    min-height: 0;
+  }
+
+  .collectible-shelf {
+    gap: 5px;
+  }
+
+  .shelf-slot {
+    min-height: 94px;
+    padding: 6px;
+  }
+
+  .shelf-slot span {
+    font-size: 22px;
+  }
+
+  .discovery-card {
+    right: 15px;
+    bottom: 15px;
   }
 }
 
