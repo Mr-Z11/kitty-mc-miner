@@ -270,7 +270,7 @@
             </div>
 
             <div class="boss-hud hidden" id="bossHud">
-              <div><small>区域 BOSS</small><strong id="bossName">腐化史莱姆王</strong></div>
+              <div><small id="bossKind">区域 BOSS</small><strong id="bossName">腐化史莱姆王</strong></div>
               <span><i id="bossMeter"></i></span>
             </div>
 
@@ -534,6 +534,18 @@
           <span><i class="mini-block type-diamond"></i> 钻石</span>
         </div>
         <button class="primary-button" id="startGame" type="button">开始挖矿</button>
+      </div>
+    </div>
+
+    <div class="victory-modal hidden" id="victoryModal" role="dialog" aria-modal="true" aria-labelledby="victoryTitle">
+      <div class="victory-rays" aria-hidden="true"></div>
+      <div class="victory-card">
+        <p class="eyebrow">ULTIMATE BOSS DEFEATED</p>
+        <div class="victory-emblem" aria-hidden="true">✦</div>
+        <h2 id="victoryTitle">猫猫矿洞 · 通关！</h2>
+        <strong>终焉深渊龙已经倒下</strong>
+        <p>你完成了所有战力强化，击败了矿洞最深处的终极 Boss。地心信标照亮整座村庄，自由深渊仍可继续挑战。</p>
+        <button class="primary-button" id="closeVictory" type="button">继续自由探索</button>
       </div>
     </div>
   </body>

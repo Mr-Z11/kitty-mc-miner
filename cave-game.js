@@ -642,7 +642,8 @@
 
       const config = this.getConfig();
       const critical = Math.random() < (config.criticalChance || 0);
-      const damage = (config.swordDamage || 2) * (critical ? 2 : 1);
+      const rawDamage = (config.swordDamage || 2) * (critical ? 2 : 1);
+      const damage = Math.max(1, rawDamage - (enemy.defense || 0));
       enemy.hp -= damage;
       enemy.hitUntil = performance.now() + 160;
       this.spawnParticles(enemy.x + 13, enemy.y + 13, "gold", critical ? 11 : 5);
@@ -821,7 +822,13 @@
           layout: this.currentLayout?.name || "",
           hint,
           x: Math.floor(this.player.x / TILE),
-          boss: activeBoss ? { name: activeBoss.name, hp: activeBoss.hp, maxHp: activeBoss.maxHp } : null,
+          boss: activeBoss ? {
+            name: activeBoss.name,
+            hp: activeBoss.hp,
+            maxHp: activeBoss.maxHp,
+            defense: activeBoss.defense || 0,
+            finalBoss: Boolean(activeBoss.finalBoss),
+          } : null,
         });
       }
     }

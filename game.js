@@ -131,7 +131,7 @@ const STORY_CHAPTERS = [
       effect: "幸运掉落 +10%",
       cost: { gold: 24, diamond: 12, coins: 980 },
     },
-    boss: { id: "crystal-colossus", name: "黑暗晶体巨像", color: "#62d7d4", hp: 260, damage: 6, reward: 1600, xp: 320 },
+    boss: { id: "crystal-colossus", name: "黑暗晶体巨像", color: "#62d7d4", hp: 260, damage: 6, defense: 6, reward: 1600, xp: 320 },
     unlock: "终焉祭坛",
   },
 ];
@@ -142,6 +142,7 @@ const FINAL_BOSS = {
   color: "#cf5d74",
   hp: 1600,
   damage: 7,
+  defense: 10,
   reward: 8000,
   xp: 1800,
   marks: 10,
@@ -935,6 +936,7 @@ function abyssBossForLevel(level = state.abyssBossesDefeated + 1) {
     color: template.color,
     hp: 210 + level * 58,
     damage: Math.min(13, 5 + Math.floor(level / 2)),
+    defense: Math.min(8, 2 + Math.floor(level / 3)),
     reward: 180 + level * 95,
     xp: 56 + level * 24,
     marks: 1 + Math.floor((level - 1) / 4),
@@ -1361,7 +1363,7 @@ function renderVillage() {
       <article class="final-boss-card">
         <small>FINAL BOSS · TRUE ENDING</small>
         <strong>${FINAL_BOSS.name}</strong>
-        <p>最终挑战只看总战力。挖矿深度和镐力会提供高额战力，继续下潜、换更强的镐子、提升耐久、武器、护甲、矿灯和等级，都能把你推向终局。生命 ${FINAL_BOSS.hp} · 攻击 ${FINAL_BOSS.damage}</p>
+        <p>最终挑战只看总战力。挖矿深度和镐力会提供高额战力，继续下潜、换更强的镐子、提升耐久、武器、护甲、矿灯和等级，都能把你推向终局。生命 ${FINAL_BOSS.hp} · 攻击 ${FINAL_BOSS.damage} · 防御 ${FINAL_BOSS.defense}</p>
         <div class="final-gate-list">
           <div class="final-gate-item ${ready ? "done" : "missing"}">
             <span>${ready ? "✓" : "!"}</span>
@@ -1426,7 +1428,7 @@ function renderVillage() {
       <article class="abyss-card boss-contract">
         <small>ENDLESS BOSS · NEXT ${state.abyssBossesDefeated + 1}</small>
         <strong>${boss.name}</strong>
-        <p>生命 ${boss.hp} · 攻击 ${boss.damage} · 击败后获得 ${boss.marks} 徽记</p>
+        <p>生命 ${boss.hp} · 攻击 ${boss.damage} · 防御 ${boss.defense} · 击败后获得 ${boss.marks} 徽记</p>
         <button class="buy-button boss-button" type="button" data-summon-abyss-boss="${boss.id}" ${bossActive ? "disabled" : ""}>
           ${bossActive ? "Boss 已进入矿洞" : "召唤深渊首领"}
         </button>
@@ -1458,8 +1460,9 @@ function renderVillage() {
   }
 
   const bossActive = caveGame?.hasActiveBoss();
+  const bossStats = `生命 ${chapter.boss.hp} · 攻击 ${chapter.boss.damage}${chapter.boss.defense ? ` · 防御 ${chapter.boss.defense}` : ""}`;
   dom.villageAction.innerHTML = `
-    <p>工程完成。击败${chapter.boss.name}，解锁${chapter.unlock}。</p>
+    <p>工程完成。击败${chapter.boss.name}，解锁${chapter.unlock}。${bossStats}</p>
     <button class="buy-button village-button boss-button" type="button" data-summon-boss="${chapter.boss.id}" ${bossActive ? "disabled" : ""}>
       ${bossActive ? "Boss 已进入矿洞" : `召唤${chapter.boss.name}`}
     </button>
