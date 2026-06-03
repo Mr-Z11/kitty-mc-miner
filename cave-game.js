@@ -85,6 +85,16 @@
       return this.options.getConfig ? this.options.getConfig() : {};
     }
 
+    syncPlayerVitals({ healToFull = false, config = this.getConfig() } = {}) {
+      const nextMaxHp = Math.max(1, Math.floor(Number(config.maxHp) || this.player.maxHp || 5));
+      this.player.maxHp = nextMaxHp;
+      if (healToFull) {
+        this.player.hp = nextMaxHp;
+        return;
+      }
+      this.player.hp = Math.max(0, Math.min(this.player.hp, nextMaxHp));
+    }
+
     resizeCanvas() {
       const ratio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
       const width = Math.max(520, this.canvas.clientWidth || 960);
@@ -321,6 +331,7 @@
 
     updateEnemies(delta, timestamp) {
       const config = this.getConfig();
+      this.syncPlayerVitals({ config });
       this.enemies.forEach((enemy) => {
         if (enemy.dead) return;
         const dx = this.player.x - enemy.x;
@@ -518,6 +529,7 @@
     }
 
     handlePlayerDeath() {
+      this.syncPlayerVitals();
       const result = this.options.onPlayerDeath
         ? this.options.onPlayerDeath({ hp: this.player.hp, maxHp: this.player.maxHp })
         : { reset: true, message: "血量归零，背包资源已清空，剑与护甲等级已重置。" };
@@ -590,6 +602,7 @@
     }
 
     resetPosition(restoreHealth = false) {
+      this.syncPlayerVitals({ healToFull: restoreHealth });
       this.restoreEntrancePlatform();
       this.player.x = 96;
       this.player.y = FLOOR_ROW * TILE - PLAYER_HEIGHT;
@@ -598,7 +611,6 @@
       this.player.grounded = true;
       this.player.jumpsUsed = 0;
       this.player.airJumpUntil = 0;
-      if (restoreHealth) this.player.hp = this.player.maxHp;
       this.player.invulnerableUntil = performance.now() + 1000;
       this.cameraX = 0;
       this.cameraY = 0;
@@ -607,6 +619,7 @@
     }
 
     healPlayer(amount) {
+      this.syncPlayerVitals();
       const previousHp = this.player.hp;
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.max(0, amount));
       this.notifyStatus();
@@ -614,6 +627,7 @@
     }
 
     spendPlayerHealth(amount = 1) {
+      this.syncPlayerVitals();
       this.player.hp = Math.max(0, this.player.hp - Math.max(0, amount));
       if (this.player.hp <= 0) {
         this.handlePlayerDeath();
@@ -635,6 +649,7 @@
 
     notifyStatus() {
       const config = this.getConfig();
+      this.syncPlayerVitals({ config });
       const nearestEnemy = this.nearestEnemy();
       const nearestBlock = this.nearestBlock();
       const firstEnemy = this.enemies.find((enemy) => !enemy.dead);
@@ -966,6 +981,8 @@
     }
 
     getStatus() {
+      const config = this.getConfig();
+      this.syncPlayerVitals({ config });
       return {
         x: Math.round(this.player.x),
         y: Math.round(this.player.y),
@@ -973,7 +990,7 @@
         maxHp: this.player.maxHp,
         cameraX: Math.round(this.cameraX),
         cameraY: Math.round(this.cameraY),
-        durability: this.getConfig().durability,
+        durability: config.durability,
         nearbyBlock: this.nearestBlock()?.type || null,
         nearbyEnemy: this.nearestEnemy()?.name || null,
         boss: this.enemies

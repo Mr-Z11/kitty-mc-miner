@@ -161,6 +161,8 @@ const FINAL_BOSS_REQUIREMENTS = {
 
 const BUYABLE_SPECIAL_MATERIALS = new Set(["redstone", "lapis", "gold", "emerald", "amethyst", "diamond"]);
 const BASE_STAMINA = 5;
+const BASE_COMBAT_HEALTH = 5;
+const LEVEL_VITALITY_INTERVAL = 3;
 const STAMINA_RESTORE_AMOUNT = 2;
 const HEALTH_KIT_RESTORE = 2;
 const HEALTH_REVIVE_AMOUNT = 3;
@@ -701,10 +703,18 @@ function caveSoupCost() {
   return 14 + accessibleDepth() * 2;
 }
 
+function levelVitalityBonus(level = playerLevel()) {
+  return Math.floor((Math.max(1, level) - 1) / LEVEL_VITALITY_INTERVAL);
+}
+
 function maxStamina() {
   return BASE_STAMINA
-    + Math.floor((playerLevel() - 1) / 4)
+    + levelVitalityBonus()
     + (isVillageBuilt("heartBeacon") ? 1 : 0);
+}
+
+function maxCombatHealth() {
+  return BASE_COMBAT_HEALTH + levelVitalityBonus();
 }
 
 function staminaTopUpCost() {
@@ -861,17 +871,30 @@ function finalBossGateText() {
 
 function addXp(amount) {
   const oldLevel = playerLevel();
+  const oldMaxStamina = maxStamina();
+  const oldMaxHealth = maxCombatHealth();
+  const wasStaminaFull = state.stamina >= oldMaxStamina;
+  const oldCaveStatus = caveGame?.getStatus();
+  const wasHealthFull = oldCaveStatus ? oldCaveStatus.hp >= oldCaveStatus.maxHp : true;
   state.xp += amount;
   const newLevel = playerLevel();
   if (newLevel > oldLevel) {
-    showToast(`矿工等级提升至 Lv.${newLevel}！`);
-    logEvent(`积累的经验有了回报，猫猫矿工升到了 Lv.${newLevel}。`);
+    const newMaxStamina = maxStamina();
+    const newMaxHealth = maxCombatHealth();
+    const gains = [];
+    if (newMaxStamina > oldMaxStamina) gains.push(`体力上限 ${oldMaxStamina}→${newMaxStamina}`);
+    if (newMaxHealth > oldMaxHealth) gains.push(`血量上限 ${oldMaxHealth}→${newMaxHealth}`);
+    if (wasStaminaFull) state.stamina = newMaxStamina;
+    normalizeStamina();
+    caveGame?.syncPlayerVitals?.({ healToFull: wasHealthFull });
+    showToast(`矿工等级提升至 Lv.${newLevel}！${gains.length ? gains.join("，") : ""}`);
+    logEvent(`积累的经验有了回报，猫猫矿工升到了 Lv.${newLevel}。${gains.length ? gains.join("，") + "。" : ""}`);
     playTone("upgrade");
   }
 }
 
 function maxAdventureHealth(supplied = state.expedition?.supplied) {
-  return 8 + state.perks.armor + (supplied ? 2 : 0);
+  return 8 + levelVitalityBonus() + state.perks.armor + (supplied ? 2 : 0);
 }
 
 function routeById(routeId) {
@@ -1085,10 +1108,9 @@ function renderCaveHud(status) {
 }
 
 function renderTopHealth(status = caveGame?.getStatus()) {
-  dom.topHealth.textContent = Array.from(
-    { length: status?.maxHp || 5 },
-    (_, index) => (index < (status?.hp ?? 5) ? "♥" : "♡")
-  ).join(" ");
+  const hp = status?.hp ?? maxCombatHealth();
+  const maxHp = status?.maxHp ?? maxCombatHealth();
+  dom.topHealth.textContent = `♥ ${hp} / ${maxHp}`;
 }
 
 function renderTopStamina() {
@@ -1157,7 +1179,7 @@ function renderCaveShop() {
       <span class="cave-supply-icon" aria-hidden="true">⚡</span>
       <div class="cave-supply-copy">
         <strong>矿工热汤</strong>
-        <small>恢复 ${STAMINA_RESTORE_AMOUNT} 点体力。体力只影响挖矿，不会导致重置。</small>
+        <small>恢复 ${STAMINA_RESTORE_AMOUNT} 点体力，当前上限 ${maxStamina()}；等级每 ${LEVEL_VITALITY_INTERVAL} 级 +1。</small>
       </div>
       <button class="buy-button" type="button" data-buy-cave-supply="soup" ${staminaFull || state.coins < soupCost ? "disabled" : ""}>
         ${staminaFull ? "体力已满" : state.coins < soupCost ? missingCoinsLabel(soupCost) : `${soupCost} ¢`}
@@ -1167,7 +1189,7 @@ function renderCaveShop() {
       <span class="cave-supply-icon" aria-hidden="true">♥</span>
       <div class="cave-supply-copy">
         <strong>战斗绷带</strong>
-        <small>消耗 ${formatRequirement(HEALTH_KIT_RECIPE)}，恢复 ${HEALTH_KIT_RESTORE} 点血量。血量只会被怪物和 Boss 扣除。</small>
+        <small>消耗 ${formatRequirement(HEALTH_KIT_RECIPE)}，恢复 ${HEALTH_KIT_RESTORE} 点血量，当前上限 ${caveStatus?.maxHp ?? maxCombatHealth()}；等级每 ${LEVEL_VITALITY_INTERVAL} 级 +1。</small>
       </div>
       <button class="buy-button" type="button" data-buy-cave-supply="bandage" ${healthFull || Boolean(healthKitMissing) ? "disabled" : ""}>
         ${healthFull ? "血量已满" : healthKitMissing || "制作回血"}
@@ -2438,6 +2460,7 @@ function createCaveGame() {
         durability: state.pickaxeDurability,
         fortuneChance: fortuneChance(),
         materialNames: Object.fromEntries(Object.entries(MATERIALS).map(([type, material]) => [type, material.name])),
+        maxHp: maxCombatHealth(),
         swordColor: sword.color,
         swordDamage: sword.damage,
         swordName: sword.name,
