@@ -13,6 +13,69 @@
   const GROUND_JUMP_VELOCITY = -390;
   const AIR_JUMP_VELOCITY = -355;
 
+  const CAVE_LAYOUTS = [
+    {
+      id: "timber-ribs",
+      name: "支柱矿道",
+      torchStep: 13,
+      obstacles: [[8, 12], [16, 12], [25, 11], [36, 12], [47, 10], [59, 12], [70, 11], [83, 12], [96, 11]],
+      ledges: [[12, 9, 4], [31, 10, 3], [53, 9, 4], [75, 10, 4], [91, 8, 3]],
+      stalactites: [[22, 6, 3], [43, 5, 4], [67, 6, 3], [88, 5, 3]],
+      clusters: [[18, 11, 2, 1], [64, 10, 2, 2], [100, 11, 2, 1]],
+      enemies: [17, 28, 43, 58, 72, 86, 99],
+    },
+    {
+      id: "stepped-fault",
+      name: "错层断阶",
+      torchStep: 15,
+      obstacles: [[10, 12], [18, 11], [26, 10], [38, 12], [50, 11], [61, 10], [74, 12], [86, 11], [98, 12]],
+      ledges: [[14, 10, 3], [23, 8, 3], [43, 9, 5], [66, 8, 4], [88, 10, 4]],
+      stalactites: [[33, 5, 3], [56, 6, 2], [79, 5, 4]],
+      clusters: [[29, 11, 3, 1], [69, 11, 3, 1]],
+      enemies: [21, 34, 49, 64, 78, 94, 104],
+    },
+    {
+      id: "crystal-gallery",
+      name: "晶簇回廊",
+      torchStep: 12,
+      obstacles: [[12, 12], [24, 12], [35, 11], [49, 12], [60, 11], [71, 12], [84, 10], [98, 12]],
+      ledges: [[9, 9, 5], [28, 8, 4], [45, 10, 5], [63, 8, 5], [82, 9, 4], [96, 7, 3]],
+      stalactites: [[18, 5, 4], [39, 6, 3], [58, 5, 4], [77, 6, 3], [101, 5, 3]],
+      clusters: [[31, 10, 3, 2], [53, 9, 2, 2], [89, 11, 3, 1]],
+      enemies: [18, 31, 46, 59, 74, 88, 101],
+    },
+    {
+      id: "broken-bridge",
+      name: "断桥矿脊",
+      torchStep: 16,
+      obstacles: [[9, 12], [20, 12], [33, 11], [44, 12], [57, 10], [69, 12], [82, 11], [94, 12]],
+      ledges: [[13, 9, 7], [30, 10, 5], [52, 8, 7], [73, 10, 6], [92, 9, 5]],
+      stalactites: [[25, 5, 3], [48, 6, 2], [66, 5, 3], [87, 6, 3]],
+      clusters: [[38, 11, 2, 2], [61, 11, 2, 1], [101, 10, 2, 2]],
+      enemies: [16, 30, 45, 60, 77, 91, 103],
+    },
+    {
+      id: "snake-vein",
+      name: "蛇形矿脉",
+      torchStep: 14,
+      obstacles: [[7, 12], [15, 10], [28, 12], [40, 11], [51, 12], [63, 10], [75, 12], [89, 11], [101, 12]],
+      ledges: [[17, 9, 3], [32, 11, 4], [47, 8, 4], [61, 10, 3], [79, 8, 4], [94, 10, 3]],
+      stalactites: [[23, 6, 2], [42, 5, 4], [69, 6, 2], [92, 5, 4]],
+      clusters: [[34, 10, 2, 2], [55, 11, 3, 1], [80, 10, 2, 2]],
+      enemies: [19, 33, 48, 62, 76, 90, 104],
+    },
+    {
+      id: "deep-hall",
+      name: "地心大厅",
+      torchStep: 18,
+      obstacles: [[11, 12], [23, 11], [37, 12], [52, 10], [66, 12], [80, 11], [95, 12]],
+      ledges: [[15, 10, 6], [34, 8, 6], [58, 9, 7], [82, 8, 6], [97, 10, 4]],
+      stalactites: [[29, 5, 5], [50, 6, 3], [73, 5, 5], [92, 6, 3]],
+      clusters: [[42, 11, 4, 1], [64, 10, 3, 2], [86, 11, 4, 1]],
+      enemies: [20, 36, 51, 67, 82, 98, 106],
+    },
+  ];
+
   const BLOCK_COLORS = Object.fromEntries(
     Object.entries(MATERIALS).map(([type, material]) => [type, material.colors])
   );
@@ -33,6 +96,17 @@
 
   function distance(a, b) {
     return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function seededRandom(seed) {
+    let value = seed >>> 0;
+    return () => {
+      value += 0x6D2B79F5;
+      let next = value;
+      next = Math.imul(next ^ (next >>> 15), next | 1);
+      next ^= next + Math.imul(next ^ (next >>> 7), next | 61);
+      return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
+    };
   }
 
   class CaveGame {
@@ -160,6 +234,8 @@
       this.blocks = [];
       const config = this.getConfig();
       const depth = config.depth || 1;
+      const layout = this.buildLayerLayout(depth);
+      this.currentLayout = layout;
 
       for (let column = 0; column < WORLD_COLUMNS; column += 1) {
         for (let row = FLOOR_ROW; row < WORLD_ROWS; row += 1) {
@@ -167,28 +243,33 @@
         }
       }
 
-      const obstacles = [
-        [8, 12], [14, 12], [15, 11], [23, 12], [30, 12], [31, 11],
-        [39, 12], [45, 12], [46, 11], [47, 10], [58, 12], [67, 12],
-        [68, 11], [76, 12], [84, 12], [85, 11], [94, 12], [102, 12],
-      ];
-      obstacles.forEach(([column, row]) => {
+      layout.obstacles.forEach(([column, row]) => {
         for (let currentRow = row; currentRow < FLOOR_ROW; currentRow += 1) {
           this.addBlock(column, currentRow, this.pickBlockType(column, currentRow, depth + 6));
         }
       });
 
-      const ledges = [
-        [11, 9, 4], [19, 10, 3], [34, 9, 4], [51, 10, 4],
-        [62, 9, 3], [72, 10, 4], [89, 9, 4], [99, 10, 3],
-      ];
-      ledges.forEach(([column, row, width]) => {
+      layout.ledges.forEach(([column, row, width]) => {
         for (let offset = 0; offset < width; offset += 1) {
           this.addBlock(column + offset, row, this.pickBlockType(column + offset, row, depth + 9));
         }
       });
 
-      this.enemies = [17, 27, 42, 55, 70, 82, 97, 106].map((column, index) => {
+      layout.stalactites.forEach(([column, row, height]) => {
+        for (let offset = 0; offset < height; offset += 1) {
+          this.addBlock(column, row + offset, this.pickBlockType(column, row + offset, depth + 11));
+        }
+      });
+
+      layout.clusters.forEach(([column, row, width, height]) => {
+        for (let xOffset = 0; xOffset < width; xOffset += 1) {
+          for (let yOffset = 0; yOffset < height; yOffset += 1) {
+            this.addBlock(column + xOffset, row + yOffset, this.pickBlockType(column + xOffset, row + yOffset, depth + 8));
+          }
+        }
+      });
+
+      this.enemies = layout.enemies.map((column, index) => {
         const type = ENEMY_TYPES[Math.min(ENEMY_TYPES.length - 1, Math.floor((depth + index) / 12))];
         return {
           ...type,
@@ -207,6 +288,59 @@
           dead: false,
         };
       });
+    }
+
+    buildLayerLayout(depth) {
+      const environment = environmentForDepth(depth);
+      const template = CAVE_LAYOUTS[(depth * 7 + environment.danger * 3) % CAVE_LAYOUTS.length];
+      const random = seededRandom(depth * 928371 + environment.danger * 8191);
+      const shift = Math.floor(random() * 9) - 4;
+      const mirrored = depth % 2 === 0;
+
+      const transformColumn = (column, width = 1, jitterSize = 2) => {
+        const jitter = Math.floor(random() * (jitterSize * 2 + 1)) - jitterSize;
+        const raw = mirrored ? WORLD_COLUMNS - column - width + shift + jitter : column + shift + jitter;
+        return clamp(raw, 6, WORLD_COLUMNS - DESCENT_EXIT_COLUMNS - width - 1);
+      };
+
+      const transformRow = (row, jitterSize = 1) => {
+        const jitter = Math.floor(random() * (jitterSize * 2 + 1)) - jitterSize;
+        return clamp(row + jitter, 6, FLOOR_ROW - 1);
+      };
+
+      const obstacles = template.obstacles.map(([column, row]) => [
+        transformColumn(column, 1, 2),
+        transformRow(row, 1),
+      ]);
+      const ledges = template.ledges.map(([column, row, width]) => {
+        const nextWidth = clamp(width + Math.floor(random() * 3) - 1, 2, 7);
+        return [transformColumn(column, nextWidth, 2), transformRow(row, 1), nextWidth];
+      });
+      const stalactites = template.stalactites.map(([column, row, height]) => [
+        transformColumn(column, 1, 3),
+        clamp(row + Math.floor(random() * 3) - 1, 4, 7),
+        clamp(height + Math.floor(random() * 3) - 1, 2, 5),
+      ]);
+      const clusters = template.clusters.map(([column, row, width, height]) => {
+        const nextWidth = clamp(width + Math.floor(random() * 3) - 1, 2, 4);
+        const nextHeight = clamp(height + Math.floor(random() * 2), 1, 3);
+        return [transformColumn(column, nextWidth, 2), transformRow(row, 1), nextWidth, nextHeight];
+      });
+      const enemies = template.enemies
+        .map((column) => transformColumn(column, 1, 3))
+        .filter((column, index, list) => list.indexOf(column) === index)
+        .slice(0, 6 + Math.min(3, Math.floor(depth / 24)));
+
+      return {
+        ...template,
+        obstacles,
+        ledges,
+        stalactites,
+        clusters,
+        enemies,
+        torchOffset: 3 + Math.floor(random() * 5),
+        torchStep: clamp(template.torchStep + Math.floor(random() * 3) - 1, 11, 18),
+      };
     }
 
     hasActiveBoss() {
@@ -559,7 +693,7 @@
       if (result.advanced) {
         this.generateWorld();
         this.resetPosition();
-        this.setHint(`下潜成功：抵达 ${result.depth}m ${result.zone}，新的矿层已经展开。`);
+        this.setHint(`下潜成功：抵达 ${result.depth}m ${result.zone}，${this.currentLayout?.name || "新"}地形已经展开。`);
         return;
       }
 
@@ -655,8 +789,9 @@
       const nearestBlock = this.nearestBlock();
       const firstEnemy = this.enemies.find((enemy) => !enemy.dead);
       const activeBoss = this.enemies.find((enemy) => enemy.isBoss && !enemy.dead);
-      let hint = "方向键或 A、D 移动，W、↑ 或空格可连跳两次，按 E 挖矿。";
-      if (nearestBlock) hint = `附近：${config.materialNames?.[nearestBlock.type] || nearestBlock.type}，按 E 挖掘；按住方向再按 E 可定向挖。`;
+      const layoutName = this.currentLayout?.name || "普通矿道";
+      let hint = `当前地形：${layoutName}。方向键或 A、D 移动，W、↑ 或空格可连跳两次，按 E 挖矿。`;
+      if (nearestBlock) hint = `${layoutName} · 附近：${config.materialNames?.[nearestBlock.type] || nearestBlock.type}，按 E 挖掘；按住方向再按 E 可定向挖。`;
       if (this.isAtDescentExit()) hint = "矿洞尽头有下潜口。准备好后从这里向下挖，进入下一层。";
       if ((config.durability ?? 1) <= 0) hint = `镐子耐久耗尽，点击矿洞下方“金币修理”，支付 ${config.repairCost || 0} 金币补满耐久。`;
       if (nearestEnemy) hint = `${nearestEnemy.name}靠近了！按 F 使用${config.swordName || "剑"}。`;
@@ -675,6 +810,7 @@
       this.canvas.dataset.enemyY = String(Math.round(firstEnemy?.y || 0));
       this.canvas.dataset.bossName = activeBoss?.name || "";
       this.canvas.dataset.bossHp = String(activeBoss?.hp || "");
+      this.canvas.dataset.layout = this.currentLayout?.name || "";
       if (this.options.onStatus) {
         this.options.onStatus({
           hp: this.player.hp,
@@ -682,6 +818,7 @@
           armor: config.armor || 0,
           swordName: config.swordName || "木剑",
           swordQuality: config.swordQuality || "普通",
+          layout: this.currentLayout?.name || "",
           hint,
           x: Math.floor(this.player.x / TILE),
           boss: activeBoss ? { name: activeBoss.name, hp: activeBoss.hp, maxHp: activeBoss.maxHp } : null,
@@ -774,7 +911,9 @@
     }
 
     drawTorches(ctx) {
-      for (let column = 4; column < WORLD_COLUMNS; column += 14) {
+      const step = this.currentLayout?.torchStep || 14;
+      const offset = this.currentLayout?.torchOffset || 4;
+      for (let column = offset; column < WORLD_COLUMNS; column += step) {
         const x = column * TILE;
         ctx.fillStyle = "#6e482a";
         ctx.fillRect(x, 272, 5, 24);
@@ -992,6 +1131,7 @@
         cameraX: Math.round(this.cameraX),
         cameraY: Math.round(this.cameraY),
         durability: config.durability,
+        layout: this.currentLayout?.name || "",
         nearbyBlock: this.nearestBlock()?.type || null,
         nearbyEnemy: this.nearestEnemy()?.name || null,
         boss: this.enemies
