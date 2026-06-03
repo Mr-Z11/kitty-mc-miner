@@ -8,10 +8,10 @@
       content="小猫挖矿 MC 版：挖方块、卖矿石、升级镐子和背包。"
     />
     <title>小猫挖矿 MC 版</title>
-    <link rel="stylesheet" href="./styles.css?v=16" />
+    <link rel="stylesheet" href="./styles.css?v=17" />
     <script defer src="./game-data.js?v=8"></script>
-    <script defer src="./cave-game.js?v=20"></script>
-    <script defer src="./game.js?v=19"></script>
+    <script defer src="./cave-game.js?v=21"></script>
+    <script defer src="./game.js?v=20"></script>
   </head>
   <body>
     <div class="screen-noise" aria-hidden="true"></div>
@@ -83,6 +83,10 @@
               <strong>Lv.<span id="levelCount">1</span></strong>
               <span class="mini-meter"><i id="xpMeter"></i></span>
             </div>
+          </div>
+          <div class="stat-chip timer-chip">
+            <span class="stat-icon timer-icon">◷</span>
+            <div><small>通关计时</small><strong id="runClock">00:00</strong></div>
           </div>
         </div>
 
@@ -533,19 +537,56 @@
           <span><i class="mini-block type-stone"></i> 石材</span>
           <span><i class="mini-block type-diamond"></i> 钻石</span>
         </div>
+        <div class="intro-records" aria-label="通关计时与排行榜">
+          <div>
+            <small>当前计时</small>
+            <strong id="introRunClock">00:00</strong>
+          </div>
+          <div>
+            <small>最快通关</small>
+            <strong id="introBestTime">暂无记录</strong>
+          </div>
+          <section class="leaderboard-panel" aria-labelledby="leaderboardTitle">
+            <h3 id="leaderboardTitle">通关排行榜</h3>
+            <ol id="leaderboardList">
+              <li><span>暂无成绩</span><b>--:--</b></li>
+            </ol>
+          </section>
+        </div>
         <button class="primary-button" id="startGame" type="button">开始挖矿</button>
       </div>
     </div>
 
     <div class="victory-modal hidden" id="victoryModal" role="dialog" aria-modal="true" aria-labelledby="victoryTitle">
       <div class="victory-rays" aria-hidden="true"></div>
+      <div class="victory-confetti" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
       <div class="victory-card">
         <p class="eyebrow">ULTIMATE BOSS DEFEATED</p>
         <div class="victory-emblem" aria-hidden="true">✦</div>
         <h2 id="victoryTitle">猫猫矿洞 · 通关！</h2>
         <strong>终焉深渊龙已经倒下</strong>
-        <p>你完成了所有战力强化，击败了矿洞最深处的终极 Boss。地心信标照亮整座村庄，自由深渊仍可继续挑战。</p>
-        <button class="primary-button" id="closeVictory" type="button">继续自由探索</button>
+        <p>你完成了所有战力强化，击败了矿洞最深处的终极 Boss。游戏已经结束，进度锁定；记录成绩后可重置开始下一局。</p>
+        <div class="victory-time">
+          <small>最终通关用时</small>
+          <b id="victoryDuration">00:00</b>
+        </div>
+        <form class="victory-score-form" id="victoryScoreForm">
+          <label for="victoryNameInput">输入用户名进入排行榜</label>
+          <div>
+            <input id="victoryNameInput" name="victoryName" type="text" maxlength="18" autocomplete="nickname" placeholder="矿工名" />
+            <button class="primary-button" id="submitVictoryScore" type="submit">记录成绩</button>
+          </div>
+          <small id="victoryScoreHint">排行榜保存在本机浏览器中，重置游戏不会清空记录。</small>
+        </form>
+        <section class="leaderboard-panel victory-leaderboard" aria-labelledby="victoryLeaderboardTitle">
+          <h3 id="victoryLeaderboardTitle">通关排行榜</h3>
+          <ol id="victoryLeaderboard">
+            <li><span>暂无成绩</span><b>--:--</b></li>
+          </ol>
+        </section>
+        <button class="primary-button reset-victory-button" id="victoryResetGame" type="button">重置游戏，重新开始</button>
       </div>
     </div>
   </body>

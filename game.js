@@ -1,6 +1,8 @@
 "use strict";
 
 const SAVE_KEY = "kitty-mc-miner-save-v1";
+const LEADERBOARD_KEY = "kitty-mc-miner-leaderboard-v1";
+const MAX_LEADERBOARD_ENTRIES = 10;
 const MAX_TICKETS = 3;
 const TICKET_MINE_INTERVAL = 12;
 const MAX_FREE_EXPEDITIONS = 2;
@@ -326,6 +328,10 @@ const initialState = () => ({
   village: defaultVillage(),
   defeatedBosses: [],
   finalBossDefeated: false,
+  gameStartedAt: null,
+  victoryCompletedAt: null,
+  victoryDurationMs: null,
+  victoryLeaderboardName: "",
   abyssContract: null,
   abyssContractsCompleted: 0,
   abyssBossesDefeated: 0,
@@ -350,6 +356,7 @@ normalizePickaxeDurability();
 normalizeStamina();
 normalizeExpeditionState();
 normalizeAudioState();
+normalizeTimingState();
 let audioContext;
 let soundBus;
 let musicBus;
@@ -358,6 +365,7 @@ let musicStep = 0;
 let audioUnlocked = false;
 let audioPanelOpen = false;
 let toastTimer;
+let clockTimer;
 let caveGame;
 let discoveryQueue = [];
 
@@ -370,6 +378,7 @@ const dom = {
   topMiningPower: document.querySelector("#topMiningPower"),
   levelCount: document.querySelector("#levelCount"),
   xpMeter: document.querySelector("#xpMeter"),
+  runClock: document.querySelector("#runClock"),
   streakCount: document.querySelector("#streakCount"),
   zoneName: document.querySelector("#zoneName"),
   zoneProgress: document.querySelector("#zoneProgress"),
@@ -438,6 +447,17 @@ const dom = {
   toastMessage: document.querySelector("#toastMessage"),
   introModal: document.querySelector("#introModal"),
   startGame: document.querySelector("#startGame"),
+  introRunClock: document.querySelector("#introRunClock"),
+  introBestTime: document.querySelector("#introBestTime"),
+  leaderboardList: document.querySelector("#leaderboardList"),
+  victoryModal: document.querySelector("#victoryModal"),
+  victoryDuration: document.querySelector("#victoryDuration"),
+  victoryScoreForm: document.querySelector("#victoryScoreForm"),
+  victoryNameInput: document.querySelector("#victoryNameInput"),
+  submitVictoryScore: document.querySelector("#submitVictoryScore"),
+  victoryScoreHint: document.querySelector("#victoryScoreHint"),
+  victoryLeaderboard: document.querySelector("#victoryLeaderboard"),
+  victoryResetGame: document.querySelector("#victoryResetGame"),
   openAdventure: document.querySelector("#openAdventure"),
   freeExpeditionCount: document.querySelector("#freeExpeditionCount"),
   ticketCount: document.querySelector("#ticketCount"),
@@ -514,6 +534,88 @@ function saveGame() {
   localStorage.setItem(SAVE_KEY, JSON.stringify(state));
 }
 
+function loadLeaderboard() {
+  try {
+    const entries = JSON.parse(localStorage.getItem(LEADERBOARD_KEY));
+    if (!Array.isArray(entries)) return [];
+    return entries
+      .filter((entry) => entry && Number.isFinite(Number(entry.durationMs)))
+      .map((entry) => ({
+        id: String(entry.id || entry.completedAt || globalThis.crypto?.randomUUID?.() || Date.now()),
+        name: sanitizePlayerName(entry.name || "匿名矿工"),
+        durationMs: Math.max(0, Math.floor(Number(entry.durationMs))),
+        completedAt: Number(entry.completedAt) || Date.now(),
+      }))
+      .sort((left, right) => left.durationMs - right.durationMs || left.completedAt - right.completedAt)
+      .slice(0, MAX_LEADERBOARD_ENTRIES);
+  } catch {
+    return [];
+  }
+}
+
+function saveLeaderboard(entries) {
+  localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries.slice(0, MAX_LEADERBOARD_ENTRIES)));
+}
+
+function sanitizePlayerName(name) {
+  return String(name || "")
+    .replace(/[<>]/g, "")
+    .trim()
+    .slice(0, 18) || "匿名矿工";
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function formatDuration(ms) {
+  const totalSeconds = Math.max(0, Math.floor(Number(ms) / 1000) || 0);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const parts = hours > 0
+    ? [hours, minutes, seconds]
+    : [minutes, seconds];
+  return parts.map((part) => String(part).padStart(2, "0")).join(":");
+}
+
+function currentRunDurationMs(now = Date.now()) {
+  if (state.victoryDurationMs != null) return Math.max(0, Number(state.victoryDurationMs) || 0);
+  if (!state.gameStartedAt) return 0;
+  return Math.max(0, now - Number(state.gameStartedAt));
+}
+
+function gameLocked() {
+  return finalVictory();
+}
+
+function victoryEntryId() {
+  return state.victoryCompletedAt ? `victory-${state.victoryCompletedAt}` : "";
+}
+
+function recordVictoryScore(name) {
+  if (!finalVictory()) return;
+  const entry = {
+    id: victoryEntryId(),
+    name: sanitizePlayerName(name),
+    durationMs: currentRunDurationMs(),
+    completedAt: state.victoryCompletedAt || Date.now(),
+  };
+  const entries = loadLeaderboard().filter((candidate) => candidate.id !== entry.id);
+  entries.push(entry);
+  entries.sort((left, right) => left.durationMs - right.durationMs || left.completedAt - right.completedAt);
+  saveLeaderboard(entries);
+  state.victoryLeaderboardName = entry.name;
+  renderAll();
+  saveGame();
+  showToast(`成绩已记录：${entry.name} · ${formatDuration(entry.durationMs)}。`);
+}
+
 function inventoryTotal() {
   return Object.values(state.inventory).reduce((sum, amount) => sum + amount, 0);
 }
@@ -540,11 +642,25 @@ function normalizeAbyssState() {
   state.abyssBossesDefeated = Math.max(0, Number(state.abyssBossesDefeated) || 0);
   state.abyssMarks = Math.max(0, Number(state.abyssMarks) || 0);
   state.beaconResonance = Math.max(0, Math.min(MAX_BEACON_RESONANCE, Number(state.beaconResonance) || 0));
-  if (finalVictory() && !state.abyssContract) state.abyssContract = createAbyssContract();
+  if (finalVictory()) state.abyssContract = null;
 }
 
 function normalizeFinalBossState() {
   state.finalBossDefeated = Boolean(state.finalBossDefeated || state.defeatedBosses.includes(FINAL_BOSS.id));
+}
+
+function normalizeTimingState() {
+  state.gameStartedAt = Number(state.gameStartedAt) || null;
+  state.victoryCompletedAt = Number(state.victoryCompletedAt) || null;
+  state.victoryDurationMs = state.victoryDurationMs == null ? null : Math.max(0, Number(state.victoryDurationMs) || 0);
+  state.victoryLeaderboardName = String(state.victoryLeaderboardName || "");
+  if (finalVictory()) {
+    state.victoryCompletedAt ||= Date.now();
+    state.gameStartedAt ||= state.victoryCompletedAt;
+    state.victoryDurationMs ||= Math.max(0, state.victoryCompletedAt - state.gameStartedAt);
+    return;
+  }
+  if (state.tutorialSeen && !state.gameStartedAt) state.gameStartedAt = Date.now();
 }
 
 function activeStoryChapter() {
@@ -984,6 +1100,9 @@ function currentZone() {
 }
 
 function renderAll() {
+  renderRunClock();
+  renderLeaderboard();
+  renderVictoryModal();
   renderStats();
   renderInventory();
   renderMineLevels();
@@ -999,6 +1118,49 @@ function renderAll() {
   renderCollection();
   renderDiscoveryCard();
   renderCaveHud();
+}
+
+function renderRunClock() {
+  const label = formatDuration(currentRunDurationMs());
+  if (dom.runClock) dom.runClock.textContent = label;
+  if (dom.introRunClock) dom.introRunClock.textContent = label;
+}
+
+function leaderboardMarkup(entries = loadLeaderboard()) {
+  if (!entries.length) return `<li><span>暂无成绩</span><b>--:--</b></li>`;
+  return entries.map((entry, index) => `
+    <li class="${entry.id === victoryEntryId() ? "current-run" : ""}">
+      <span><em>#${index + 1}</em>${escapeHtml(entry.name)}</span>
+      <b>${formatDuration(entry.durationMs)}</b>
+    </li>
+  `).join("");
+}
+
+function renderLeaderboard() {
+  const entries = loadLeaderboard();
+  const best = entries[0];
+  if (dom.introBestTime) dom.introBestTime.textContent = best ? formatDuration(best.durationMs) : "暂无记录";
+  if (dom.leaderboardList) dom.leaderboardList.innerHTML = leaderboardMarkup(entries);
+  if (dom.victoryLeaderboard) dom.victoryLeaderboard.innerHTML = leaderboardMarkup(entries);
+}
+
+function renderVictoryModal() {
+  document.body.classList.toggle("game-complete", finalVictory());
+  if (!dom.victoryModal) return;
+  dom.victoryModal.classList.toggle("hidden", !finalVictory());
+  if (!finalVictory()) return;
+
+  if (dom.victoryDuration) dom.victoryDuration.textContent = formatDuration(currentRunDurationMs());
+  if (dom.victoryNameInput && document.activeElement !== dom.victoryNameInput) {
+    dom.victoryNameInput.value = state.victoryLeaderboardName || "";
+  }
+  const submitted = Boolean(state.victoryLeaderboardName);
+  if (dom.submitVictoryScore) dom.submitVictoryScore.textContent = submitted ? "更新名称" : "记录成绩";
+  if (dom.victoryScoreHint) {
+    dom.victoryScoreHint.textContent = submitted
+      ? `已记录为「${state.victoryLeaderboardName}」，可以改名后再次更新。`
+      : "排行榜保存在本机浏览器中，重置游戏不会清空记录。";
+  }
 }
 
 function renderStats() {
@@ -1333,7 +1495,7 @@ function renderVillage() {
     : chapter.title;
   dom.storyDescription.textContent = completed
     ? victory
-      ? "终极 Boss 已经倒下。猫猫村庄恢复了完整光亮，自由深渊模式已经开放。"
+      ? "终极 Boss 已经倒下。猫猫村庄恢复了完整光亮，本局游戏结束，等待记录排行或重置。"
       : "前五章打开了通往终焉祭坛的路。继续强化装备、武器和矿灯，准备击败真正让矿灯熄灭的源头。"
     : chapter.building.description;
 
@@ -1393,53 +1555,17 @@ function renderVillage() {
   }
 
   if (completed && victory) {
-    const contract = ensureAbyssContract();
-    const material = MATERIALS[contract.material];
-    const depthReady = state.depth >= contract.targetDepth;
-    const materialReady = state.inventory[contract.material] >= contract.amount;
-    const rerollCost = abyssContractRerollCost();
-    const boss = abyssBossForLevel();
-    const bossActive = caveGame?.hasActiveBoss();
-    const resonanceCost = beaconResonanceCost();
-    const resonanceMaxed = state.beaconResonance >= MAX_BEACON_RESONANCE;
     dom.villageAction.innerHTML = `
       <div class="victory-banner">
         <span>★ VICTORY ★</span>
         <strong>胜利！${FINAL_BOSS.name}已被击败</strong>
-        <small>终极 Boss 倒下后，地心矿灯彻底复燃，自由深渊模式正式开放。</small>
+        <small>通关用时 ${formatDuration(currentRunDurationMs())}。本局已经结束，排行榜记录后请重置游戏开启新一局。</small>
       </div>
-      <div class="abyss-summary">
-        <strong>深渊记录</strong>
-        <span>委托 ${state.abyssContractsCompleted}</span>
-        <span>首领 ${state.abyssBossesDefeated}</span>
-        <span>徽记 ${state.abyssMarks}</span>
-      </div>
-      <article class="abyss-card">
-        <small>ABYSS ORDER · TIER ${contract.tier}</small>
-        <strong>深渊物资委托</strong>
-        <p class="${depthReady ? "done" : ""}">下潜至 ${contract.targetDepth}m ${depthReady ? "✓" : `· 当前 ${state.depth}m`}</p>
-        <p class="${materialReady ? "done" : ""}">交付${material.name} × ${contract.amount} ${materialReady ? "✓" : `· 当前 ${state.inventory[contract.material]}`}</p>
-        <em>奖励 ${contract.rewardCoins} 金币 · ${contract.rewardXp} 经验 · ${contract.rewardMarks} 徽记 · 1 探险券</em>
-        <div class="abyss-actions">
-          <button class="buy-button" type="button" data-complete-abyss-contract ${!depthReady || !materialReady ? "disabled" : ""}>提交委托</button>
-          <button class="buy-button reroll-button" type="button" data-reroll-abyss-contract>换一批 · ${rerollCost}¢</button>
-        </div>
-      </article>
-      <article class="abyss-card boss-contract">
-        <small>ENDLESS BOSS · NEXT ${state.abyssBossesDefeated + 1}</small>
-        <strong>${boss.name}</strong>
-        <p>生命 ${boss.hp} · 攻击 ${boss.damage} · 防御 ${boss.defense} · 击败后获得 ${boss.marks} 徽记</p>
-        <button class="buy-button boss-button" type="button" data-summon-abyss-boss="${boss.id}" ${bossActive ? "disabled" : ""}>
-          ${bossActive ? "Boss 已进入矿洞" : "召唤深渊首领"}
-        </button>
-      </article>
-      <article class="abyss-card resonance-card">
-        <small>BEACON RESONANCE</small>
-        <strong>信标共鸣 Lv.${state.beaconResonance}</strong>
-        <p>永久耐久 +${state.beaconResonance * 2}${resonanceMaxed ? " · 已达顶级" : ` → +${(state.beaconResonance + 1) * 2}`}</p>
-        <button class="buy-button" type="button" data-upgrade-beacon ${resonanceMaxed || state.abyssMarks < resonanceCost ? "disabled" : ""}>
-          ${resonanceMaxed ? "已满级" : `${resonanceCost} 徽记`}
-        </button>
+      <article class="endgame-card">
+        <small>RUN CLOSED</small>
+        <strong>游戏已结束</strong>
+        <p>矿洞操作、商店升级和深渊挑战都已关闭。输入用户名记录排行榜，或点击重置重新开始。</p>
+        <button class="buy-button reset-victory-button" type="button" data-reset-after-victory>重置游戏</button>
       </article>
     `;
     return;
@@ -1820,17 +1946,7 @@ function renderObjective() {
   }
 
   if (finalVictory()) {
-    const contract = ensureAbyssContract();
-    const material = MATERIALS[contract.material];
-    if (state.depth < contract.targetDepth) {
-      dom.currentObjective.textContent = `深渊委托 Tier ${contract.tier}：继续下潜至 ${contract.targetDepth}m`;
-      return;
-    }
-    if (state.inventory[contract.material] < contract.amount) {
-      dom.currentObjective.textContent = `深渊委托 Tier ${contract.tier}：收集${material.name} ${state.inventory[contract.material]} / ${contract.amount}`;
-      return;
-    }
-    dom.currentObjective.textContent = `深渊委托 Tier ${contract.tier} 已完成：返回猫猫村庄提交物资`;
+    dom.currentObjective.textContent = `最终胜利：通关用时 ${formatDuration(currentRunDurationMs())}，记录排行榜后重置新局`;
     return;
   }
 
@@ -1839,6 +1955,13 @@ function renderObjective() {
 
 function renderSideObjective() {
   const expedition = state.expedition;
+  if (finalVictory()) {
+    dom.sideObjective.textContent = state.victoryLeaderboardName
+      ? `排行榜：${state.victoryLeaderboardName} · ${formatDuration(currentRunDurationMs())}，可重置再挑战`
+      : "排行榜：输入用户名记录本次通关成绩";
+    return;
+  }
+
   if (state.pickaxeDurability <= 0) {
     dom.sideObjective.textContent = `支线：镐子耐久耗尽，支付 ${repairPickaxeCost()} 金币完成修理`;
     return;
@@ -2076,6 +2199,7 @@ function spendStamina(amount = 1) {
 }
 
 function canCollectCaveMaterial() {
+  if (gameLocked()) return { message: "最终 Boss 已击败，本局游戏结束。请记录排行或重置新局。" };
   if (inventoryTotal() >= BACKPACKS[state.backpackIndex].capacity) {
     return { message: "背包已满，按 S 出售或升级背包。" };
   }
@@ -2087,6 +2211,7 @@ function canCollectCaveMaterial() {
 }
 
 function collectCaveMaterial({ type }) {
+  if (gameLocked()) return { amount: 0, durability: state.pickaxeDurability, name: MATERIALS[type]?.name || type };
   const backpack = BACKPACKS[state.backpackIndex];
   const luckyDrop = Math.random() < fortuneChance();
   const amount = Math.min(luckyDrop ? 2 : 1, backpack.capacity - inventoryTotal());
@@ -2110,6 +2235,11 @@ function collectCaveMaterial({ type }) {
 }
 
 function descendCaveLayer() {
+  if (gameLocked()) {
+    const message = "最终 Boss 已击败，本局游戏结束。请记录排行或重置新局。";
+    showToast(message);
+    return { advanced: false, message };
+  }
   const chapter = activeStoryChapter();
   if (caveGame?.hasActiveBoss()) {
     const message = "无法进入下一层：区域 Boss 仍在矿洞中，先击败它才能继续下潜。";
@@ -2193,6 +2323,7 @@ function ascendCaveLayer() {
 }
 
 function openCaveShop() {
+  if (gameLocked()) return;
   dom.caveShopModal.classList.remove("hidden");
   renderCaveShop();
 }
@@ -2202,6 +2333,7 @@ function closeCaveShop() {
 }
 
 function buyCaveSupply(supplyId) {
+  if (gameLocked()) return;
   if (supplyId === "soup") {
     const cost = caveSoupCost();
     if (state.coins < cost) {
@@ -2381,15 +2513,18 @@ function completeFinalBoss(bossId, marks) {
   if (bossId !== FINAL_BOSS.id || finalVictory()) return false;
 
   state.finalBossDefeated = true;
-  state.defeatedBosses.push(bossId);
+  if (!state.defeatedBosses.includes(bossId)) state.defeatedBosses.push(bossId);
+  state.victoryCompletedAt = Date.now();
+  state.gameStartedAt ||= state.victoryCompletedAt;
+  state.victoryDurationMs = Math.max(0, state.victoryCompletedAt - state.gameStartedAt);
   state.abyssMarks += marks;
-  ensureAbyssContract();
   showToast(`最终胜利！${FINAL_BOSS.name}倒下，地心矿灯彻底复燃。`);
-  logEvent(`${FINAL_BOSS.name}被击败。猫猫村庄真正获救，自由深渊模式现在开放。`);
+  logEvent(`${FINAL_BOSS.name}被击败。通关用时 ${formatDuration(state.victoryDurationMs)}，本局游戏结束。`);
   return true;
 }
 
 function completeAbyssBoss(bossId, marks) {
+  if (!finalVictory() || gameLocked()) return false;
   const boss = abyssBossForLevel();
   if (boss.id !== bossId) return false;
 
@@ -2401,7 +2536,7 @@ function completeAbyssBoss(bossId, marks) {
 }
 
 function completeAbyssContract() {
-  if (!finalVictory()) return;
+  if (!finalVictory() || gameLocked()) return;
   const contract = ensureAbyssContract();
   if (state.depth < contract.targetDepth) {
     showToast(`还需要继续下潜至 ${contract.targetDepth}m。`);
@@ -2429,7 +2564,7 @@ function completeAbyssContract() {
 }
 
 function rerollAbyssContract() {
-  if (!finalVictory()) return;
+  if (!finalVictory() || gameLocked()) return;
   const cost = abyssContractRerollCost();
   if (state.coins < cost) {
     showToast(`更换委托需要 ${cost} 金币，还差 ${cost - state.coins} 金币。`);
@@ -2447,7 +2582,7 @@ function rerollAbyssContract() {
 }
 
 function summonAbyssBoss(bossId) {
-  if (!finalVictory()) return;
+  if (!finalVictory() || gameLocked()) return;
   const boss = abyssBossForLevel();
   if (boss.id !== bossId) return;
   if (!caveGame || caveGame.hasActiveBoss()) {
@@ -2463,7 +2598,7 @@ function summonAbyssBoss(bossId) {
 }
 
 function upgradeBeaconResonance() {
-  if (!finalVictory() || state.beaconResonance >= MAX_BEACON_RESONANCE) return;
+  if (!finalVictory() || gameLocked() || state.beaconResonance >= MAX_BEACON_RESONANCE) return;
   const cost = beaconResonanceCost();
   if (state.abyssMarks < cost) {
     showToast(`还差 ${cost - state.abyssMarks} 枚深渊徽记。`);
@@ -2555,6 +2690,7 @@ function createCaveGame() {
         toolIndex: state.toolIndex,
       };
     },
+    isLocked: gameLocked,
     onDescend: descendCaveLayer,
     onEnemyDefeated: defeatCaveEnemy,
     onHint: (message) => {
@@ -2589,6 +2725,7 @@ function buyPerk(perkId) {
 }
 
 function openAdventure() {
+  if (gameLocked()) return;
   dom.adventureModal.classList.remove("hidden");
   renderAdventure();
 }
@@ -2613,6 +2750,7 @@ function closeDiscovery() {
 }
 
 function startExpedition(routeId, supplied = false) {
+  if (gameLocked()) return;
   const route = routeById(routeId);
   if (!route || state.expedition || routeLockReason(route)) return;
   if (supplied && state.expeditionTickets < 1) {
@@ -3011,6 +3149,7 @@ function resetGame(options = {}) {
   if (!skipConfirm && !window.confirm("确定要清空金币、背包和升级进度，重新开始吗？")) return;
 
   state = initialState();
+  state.gameStartedAt = Date.now();
   normalizeDurabilityLevel();
   normalizeCollections();
   normalizeLanternLevel();
@@ -3095,6 +3234,11 @@ dom.perkShop.addEventListener("click", (event) => {
 });
 
 dom.villageAction.addEventListener("click", (event) => {
+  const resetAfterVictoryButton = event.target.closest("[data-reset-after-victory]");
+  if (resetAfterVictoryButton) {
+    resetGame({ reason: "通关记录已保留，新的挑战开始了。" });
+    return;
+  }
   const repairButton = event.target.closest("[data-repair-building]");
   if (repairButton) repairVillageBuilding(repairButton.dataset.repairBuilding);
   const bossButton = event.target.closest("[data-summon-boss]");
@@ -3129,13 +3273,29 @@ dom.closeDiscovery.addEventListener("click", closeDiscovery);
 
 dom.startGame.addEventListener("click", () => {
   state.tutorialSeen = true;
+  state.gameStartedAt ||= Date.now();
   dom.introModal.classList.add("hidden");
   saveGame();
+  renderRunClock();
   playTone("upgrade");
 });
 
+dom.victoryScoreForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  recordVictoryScore(dom.victoryNameInput.value);
+});
+
+dom.victoryResetGame.addEventListener("click", () => {
+  resetGame({ reason: "通关记录已保留，新的挑战开始了。" });
+});
+
 document.addEventListener("keydown", (event) => {
+  if (event.target instanceof Element && event.target.matches("input, textarea, select")) return;
   if (!dom.introModal.classList.contains("hidden")) return;
+  if (gameLocked()) {
+    if (event.key.toLowerCase() === "m") toggleAudioMute();
+    return;
+  }
   if (event.key.toLowerCase() === "s") sellInventory();
   if (event.key.toLowerCase() === "m") toggleAudioMute();
   if (event.key === "Escape" && audioPanelOpen) closeAudioSettings();
@@ -3156,3 +3316,7 @@ renderAudioSettings();
 renderAll();
 createCaveGame();
 saveGame();
+clockTimer = window.setInterval(() => {
+  renderRunClock();
+  if (finalVictory()) renderVictoryModal();
+}, 1000);

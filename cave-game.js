@@ -160,6 +160,10 @@
       return this.options.getConfig ? this.options.getConfig() : {};
     }
 
+    isLocked() {
+      return Boolean(this.options.isLocked?.());
+    }
+
     syncPlayerVitals({ healToFull = false, config = this.getConfig() } = {}) {
       const nextMaxHp = Math.max(1, Math.floor(Number(config.maxHp) || this.player.maxHp || 5));
       this.player.maxHp = nextMaxHp;
@@ -186,6 +190,10 @@
     bindControls() {
       document.addEventListener("keydown", (event) => {
         if (event.target instanceof Element && event.target.matches("input, textarea, select")) return;
+        if (this.isLocked()) {
+          this.keys.clear();
+          return;
+        }
         const key = event.key.toLowerCase();
         const jumpKey = key === "w" || key === "arrowup" || event.code === "Space";
         if (["a", "d", "arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key)) this.keys.add(key);
@@ -209,10 +217,13 @@
         const control = button.dataset.caveControl;
         if (["left", "right"].includes(control)) {
           const key = control === "left" ? "a" : "d";
-          button.addEventListener("pointerdown", () => this.keys.add(key));
+          button.addEventListener("pointerdown", () => {
+            if (!this.isLocked()) this.keys.add(key);
+          });
           button.addEventListener("pointerup", () => this.keys.delete(key));
           button.addEventListener("pointerleave", () => this.keys.delete(key));
           button.addEventListener("click", () => {
+            if (this.isLocked()) return;
             this.player.facing = control === "left" ? -1 : 1;
             this.movePlayer("x", control === "left" ? -18 : 18);
             this.notifyStatus();
@@ -221,6 +232,7 @@
         }
 
         button.addEventListener("click", () => {
+          if (this.isLocked()) return;
           if (control === "jump") this.jump();
           if (control === "mine") this.mine();
           if (control === "attack") this.attack();
@@ -431,6 +443,14 @@
     }
 
     update(delta, timestamp) {
+      if (this.isLocked()) {
+        this.keys.clear();
+        this.player.vx = 0;
+        this.player.vy = 0;
+        this.updateEffects(delta);
+        this.notifyStatus();
+        return;
+      }
       const left = this.keys.has("a") || this.keys.has("arrowleft");
       const right = this.keys.has("d") || this.keys.has("arrowright");
       const targetVx = (right ? 1 : 0) - (left ? 1 : 0);
@@ -516,6 +536,7 @@
     }
 
     jump() {
+      if (this.isLocked()) return;
       const usedJumps = this.player.grounded ? 0 : Math.max(this.player.jumpsUsed, 1);
       if (usedJumps >= MAX_PLAYER_JUMPS) {
         this.setHint("二段跳已经用完，落地后可以再次连跳。");
@@ -580,6 +601,7 @@
     }
 
     mine(direction = "facing") {
+      if (this.isLocked()) return;
       const now = performance.now();
       if (now < this.player.nextMineAt) return;
       this.player.nextMineAt = now + 130;
@@ -633,6 +655,7 @@
     }
 
     attack() {
+      if (this.isLocked()) return;
       const enemy = this.nearestEnemy();
       this.player.attackUntil = performance.now() + 210;
       if (!enemy) {
