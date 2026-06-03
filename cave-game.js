@@ -9,6 +9,9 @@
   const DESCENT_EXIT_COLUMNS = 7;
   const PLAYER_WIDTH = 24;
   const PLAYER_HEIGHT = 42;
+  const MAX_PLAYER_JUMPS = 2;
+  const GROUND_JUMP_VELOCITY = -390;
+  const AIR_JUMP_VELOCITY = -355;
 
   const BLOCK_COLORS = Object.fromEntries(
     Object.entries(MATERIALS).map(([type, material]) => [type, material.colors])
@@ -55,10 +58,12 @@
         vx: 0,
         vy: 0,
         facing: 1,
-        grounded: false,
+        grounded: true,
+        jumpsUsed: 0,
         hp: 5,
         maxHp: 5,
         invulnerableUntil: 0,
+        airJumpUntil: 0,
         mineUntil: 0,
         nextMineAt: 0,
         mineDirection: "right",
@@ -95,10 +100,11 @@
       document.addEventListener("keydown", (event) => {
         if (event.target instanceof Element && event.target.matches("input, textarea, select")) return;
         const key = event.key.toLowerCase();
+        const jumpKey = key === "w" || key === "arrowup" || event.code === "Space";
         if (["a", "d", "arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key)) this.keys.add(key);
-        if (key === "w" || key === "arrowup" || event.code === "Space") {
+        if (jumpKey) {
           event.preventDefault();
-          this.jump();
+          if (!event.repeat) this.jump();
         }
         if (key.startsWith("arrow")) {
           event.preventDefault();
@@ -268,6 +274,8 @@
         if (distanceValue > 0) {
           rect.y = block.y - rect.h;
           rect.grounded = true;
+          rect.jumpsUsed = 0;
+          rect.airJumpUntil = 0;
         } else {
           rect.y = block.y + block.h;
         }
@@ -289,6 +297,7 @@
 
       this.player.x = clamp(this.player.x, 18, WORLD_COLUMNS * TILE - this.player.w - 18);
       if (this.player.grounded && this.player.y < WORLD_ROWS * TILE - PLAYER_HEIGHT) {
+        this.player.jumpsUsed = 0;
         this.lastSafePosition = { x: this.player.x, y: this.player.y };
       }
       if (this.player.y > WORLD_ROWS * TILE) this.handleBottomFall();
@@ -359,9 +368,25 @@
     }
 
     jump() {
-      if (!this.player.grounded) return;
-      this.player.vy = -390;
+      const usedJumps = this.player.grounded ? 0 : Math.max(this.player.jumpsUsed, 1);
+      if (usedJumps >= MAX_PLAYER_JUMPS) {
+        this.setHint("二段跳已经用完，落地后可以再次连跳。");
+        return;
+      }
+
+      const airJump = !this.player.grounded;
+      this.player.jumpsUsed = usedJumps + 1;
+      this.player.vy = airJump ? AIR_JUMP_VELOCITY : GROUND_JUMP_VELOCITY;
       this.player.grounded = false;
+      this.player.airJumpUntil = airJump ? performance.now() + 260 : 0;
+      this.spawnJumpBurst(this.player.x + this.player.w / 2, this.player.y + this.player.h, airJump);
+      if (airJump) {
+        this.addFloatingText(this.player.x - 4, this.player.y - 6, "二段跳", "#d8ff72");
+        this.notifyStatus();
+        this.setHint("二段跳！空中再借一次力，落地后会恢复连跳次数。");
+        return;
+      }
+      this.notifyStatus();
     }
 
     miningVector(direction = "facing") {
@@ -538,6 +563,9 @@
       this.player.y = clamp(safe.y, 72, FLOOR_ROW * TILE - PLAYER_HEIGHT);
       this.player.vx = 0;
       this.player.vy = 0;
+      this.player.grounded = true;
+      this.player.jumpsUsed = 0;
+      this.player.airJumpUntil = 0;
       this.player.invulnerableUntil = performance.now() + 650;
       this.cameraX = clamp(this.player.x - this.viewWidth * 0.42, 0, WORLD_COLUMNS * TILE - this.viewWidth);
       this.cameraY = 0;
@@ -563,6 +591,9 @@
       this.player.y = FLOOR_ROW * TILE - PLAYER_HEIGHT;
       this.player.vx = 0;
       this.player.vy = 0;
+      this.player.grounded = true;
+      this.player.jumpsUsed = 0;
+      this.player.airJumpUntil = 0;
       if (restoreHealth) this.player.hp = this.player.maxHp;
       this.player.invulnerableUntil = performance.now() + 1000;
       this.cameraX = 0;
@@ -598,13 +629,15 @@
       const nearestBlock = this.nearestBlock();
       const firstEnemy = this.enemies.find((enemy) => !enemy.dead);
       const activeBoss = this.enemies.find((enemy) => enemy.isBoss && !enemy.dead);
-      let hint = "方向键或 A、D 移动，W、↑ 或空格跳跃，按 E 挖矿。";
+      let hint = "方向键或 A、D 移动，W、↑ 或空格可连跳两次，按 E 挖矿。";
       if (nearestBlock) hint = `附近：${config.materialNames?.[nearestBlock.type] || nearestBlock.type}，按 E 挖掘；按住方向再按 E 可定向挖。`;
       if (this.isAtDescentExit()) hint = "矿洞尽头有下潜口。准备好后从这里向下挖，进入下一层。";
       if ((config.durability ?? 1) <= 0) hint = `镐子耐久耗尽，点击矿洞下方“金币修理”，支付 ${config.repairCost || 0} 金币补满耐久。`;
       if (nearestEnemy) hint = `${nearestEnemy.name}靠近了！按 F 使用${config.swordName || "剑"}。`;
       this.canvas.dataset.playerX = String(Math.round(this.player.x));
       this.canvas.dataset.playerY = String(Math.round(this.player.y));
+      this.canvas.dataset.jumpsUsed = String(this.player.jumpsUsed);
+      this.canvas.dataset.maxJumps = String(MAX_PLAYER_JUMPS);
       this.canvas.dataset.cameraX = String(Math.round(this.cameraX));
       this.canvas.dataset.cameraY = String(Math.round(this.cameraY));
       this.canvas.dataset.enemiesAlive = String(this.enemies.filter((enemy) => !enemy.dead).length);
@@ -639,6 +672,21 @@
           vy: -40 - Math.random() * 130,
           color,
           life: 0.42 + Math.random() * 0.25,
+        });
+      }
+    }
+
+    spawnJumpBurst(x, y, airJump) {
+      const color = airJump ? "#d8ff72" : "#f0c468";
+      const total = airJump ? 12 : 7;
+      for (let index = 0; index < total; index += 1) {
+        this.particles.push({
+          x: x + (Math.random() - 0.5) * 14,
+          y: y - 4,
+          vx: (Math.random() - 0.5) * (airJump ? 190 : 120),
+          vy: airJump ? 18 + Math.random() * 95 : -20 - Math.random() * 65,
+          color,
+          life: airJump ? 0.38 + Math.random() * 0.18 : 0.28 + Math.random() * 0.12,
         });
       }
     }
@@ -740,26 +788,102 @@
       const player = this.player;
       if (timestamp < player.invulnerableUntil && Math.floor(timestamp / 70) % 2) return;
       const flip = player.facing < 0;
+      const bob = player.grounded ? Math.round(Math.sin(timestamp / 115) * 1.2) : 0;
+      const airGlow = timestamp < player.airJumpUntil;
+      const config = this.getConfig();
+
       ctx.save();
-      ctx.translate(player.x + (flip ? player.w : 0), player.y);
+      ctx.translate(player.x + (flip ? player.w : 0), player.y + bob);
       ctx.scale(flip ? -1 : 1, 1);
 
-      ctx.fillStyle = "#bb7e4f";
-      ctx.fillRect(3, 12, 22, 24);
-      ctx.fillStyle = "#d49a61";
-      ctx.fillRect(1, 0, 25, 23);
-      ctx.fillStyle = "#d49a61";
-      ctx.fillRect(2, -6, 7, 8);
-      ctx.fillRect(18, -6, 7, 8);
-      ctx.fillStyle = "#54788f";
-      ctx.fillRect(5, 24, 18, 18);
-      ctx.fillStyle = "#20211a";
-      ctx.fillRect(7, 9, 4, 4);
-      ctx.fillRect(18, 9, 4, 4);
-      ctx.fillStyle = "#855546";
-      ctx.fillRect(13, 15, 4, 3);
+      ctx.globalAlpha = 0.28;
+      ctx.fillStyle = "#07100d";
+      ctx.fillRect(2, 39, 25, 4);
+      ctx.globalAlpha = 1;
 
-      const config = this.getConfig();
+      if (airGlow) {
+        ctx.globalAlpha = 0.34;
+        ctx.fillStyle = "#d8ff72";
+        ctx.fillRect(-3, 33, 31, 10);
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.fillStyle = "#271b12";
+      ctx.fillRect(-4, 17, 10, 8);
+      ctx.fillRect(-9, 19, 7, 7);
+      ctx.fillStyle = "#b87546";
+      ctx.fillRect(-3, 18, 9, 6);
+      ctx.fillRect(-8, 20, 6, 5);
+
+      ctx.fillStyle = "#211811";
+      ctx.fillRect(3, 13, 22, 25);
+      ctx.fillStyle = "#bd7b4e";
+      ctx.fillRect(4, 12, 20, 25);
+      ctx.fillStyle = "#d6935c";
+      ctx.fillRect(4, 11, 16, 17);
+      ctx.fillStyle = "#476f84";
+      ctx.fillRect(5, 25, 18, 13);
+      ctx.fillStyle = "#6c93a8";
+      ctx.fillRect(8, 25, 3, 12);
+      ctx.fillRect(18, 25, 3, 12);
+      ctx.fillStyle = "#f6ce6c";
+      ctx.fillRect(12, 27, 5, 4);
+
+      ctx.fillStyle = "#201711";
+      ctx.fillRect(1, 35, 8, 5);
+      ctx.fillRect(16, 35, 8, 5);
+      ctx.fillStyle = "#2c2018";
+      ctx.fillRect(2, 38, 8, 4);
+      ctx.fillRect(17, 38, 8, 4);
+
+      ctx.fillStyle = "#211811";
+      ctx.fillRect(0, -5, 7, 11);
+      ctx.fillRect(18, -5, 7, 11);
+      ctx.fillStyle = "#d6935c";
+      ctx.fillRect(1, -4, 5, 9);
+      ctx.fillRect(19, -4, 5, 9);
+      ctx.fillStyle = "#f1b47b";
+      ctx.fillRect(3, -1, 2, 4);
+      ctx.fillRect(20, -1, 2, 4);
+
+      ctx.fillStyle = "#211811";
+      ctx.fillRect(0, 0, 26, 23);
+      ctx.fillStyle = "#d6935c";
+      ctx.fillRect(1, 1, 24, 21);
+      ctx.fillStyle = "#f1b47b";
+      ctx.fillRect(3, 3, 17, 12);
+      ctx.fillStyle = "#8d5a42";
+      ctx.fillRect(1, 1, 4, 3);
+      ctx.fillRect(21, 1, 4, 4);
+
+      ctx.fillStyle = "#394a43";
+      ctx.fillRect(0, 0, 26, 5);
+      ctx.fillStyle = "#26362f";
+      ctx.fillRect(2, -3, 22, 5);
+      ctx.fillStyle = "#ffd568";
+      ctx.fillRect(18, -2, 6, 5);
+      ctx.fillStyle = "#fff0a6";
+      ctx.fillRect(20, -1, 2, 2);
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#ffd568";
+      ctx.fillRect(22, -5, 22, 12);
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = "#171c16";
+      ctx.fillRect(7, 9, 3, 4);
+      ctx.fillRect(18, 9, 3, 4);
+      ctx.fillStyle = "#fff0d0";
+      ctx.fillRect(8, 9, 1, 1);
+      ctx.fillRect(19, 9, 1, 1);
+      ctx.fillStyle = "#845646";
+      ctx.fillRect(12, 14, 4, 3);
+      ctx.fillStyle = "#f3c08b";
+      ctx.fillRect(8, 16, 4, 2);
+      ctx.fillRect(16, 16, 4, 2);
+      ctx.fillStyle = "#3b2a1f";
+      ctx.fillRect(2, 14, 5, 1);
+      ctx.fillRect(20, 14, 5, 1);
+
       if (timestamp < player.attackUntil) {
         ctx.save();
         ctx.translate(23, 20);
