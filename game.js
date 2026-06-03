@@ -139,24 +139,24 @@ const FINAL_BOSS = {
   id: "abyss-heart-overlord",
   name: "地心终焉龙",
   color: "#cf5d74",
-  hp: 920,
-  damage: 6,
-  reward: 5200,
-  xp: 1100,
-  marks: 6,
+  hp: 1600,
+  damage: 7,
+  reward: 8000,
+  xp: 1800,
+  marks: 10,
   size: 74,
-  speedMultiplier: 1.42,
+  speedMultiplier: 1.36,
   finalBoss: true,
 };
 
 const FINAL_BOSS_REQUIREMENTS = {
-  depth: 50,
-  toolDamage: 14,
+  depth: 90,
+  toolDamage: 26,
   swordDamage: 17,
-  armor: 14,
-  durability: 48,
-  level: 10,
-  lanternLevel: 4,
+  armor: 18,
+  durability: 52,
+  level: 14,
+  lanternLevel: 5,
 };
 
 const ABYSS_CONTRACT_MATERIALS = ["iron", "gold", "diamond"];
@@ -758,7 +758,7 @@ function finalBossRequirements() {
       current: deepestDepthReached(),
       required: FINAL_BOSS_REQUIREMENTS.depth,
       unit: "m",
-      hint: "继续下潜，抵达终焉祭坛",
+      hint: "继续下潜到 90m，抵达真正的终焉祭坛",
     },
     {
       id: "tool",
@@ -766,7 +766,7 @@ function finalBossRequirements() {
       current: TOOLS[state.toolIndex].damage,
       required: FINAL_BOSS_REQUIREMENTS.toolDamage,
       unit: "",
-      hint: "升级至红石动力镐或更强镐子",
+      hint: "升级至紫水晶共鸣镐，打开最终矿层",
     },
     {
       id: "sword",
@@ -782,7 +782,7 @@ function finalBossRequirements() {
       current: armorScore(),
       required: FINAL_BOSS_REQUIREMENTS.armor,
       unit: "",
-      hint: "锻造高阶头盔、胸甲、护腿和靴子",
+      hint: "尽量锻造全套钻石护甲，减少最终战失误惩罚",
     },
     {
       id: "durability",
@@ -790,7 +790,7 @@ function finalBossRequirements() {
       current: maxPickaxeDurability(),
       required: FINAL_BOSS_REQUIREMENTS.durability,
       unit: "",
-      hint: "提升耐久维护，确保终局前能持续推进",
+      hint: "完成耐久维护满级，终局前把镐子打磨到极限",
     },
     {
       id: "level",
@@ -798,7 +798,7 @@ function finalBossRequirements() {
       current: playerLevel(),
       required: FINAL_BOSS_REQUIREMENTS.level,
       unit: "",
-      hint: "挖矿、击败怪物和 Boss 获取经验",
+      hint: "把矿工等级提升到 Lv.14，给最终战留足成长时间",
     },
     {
       id: "lantern",
@@ -806,7 +806,7 @@ function finalBossRequirements() {
       current: state.lanternLevel,
       required: FINAL_BOSS_REQUIREMENTS.lanternLevel,
       unit: "",
-      hint: "改装矿灯至 Lv.4，照亮终焉入口",
+      hint: "改装至绿宝石罗盘灯，照亮 90m 终焉入口",
     },
   ].map((requirement) => ({
     ...requirement,
@@ -1211,7 +1211,7 @@ function renderVillage() {
       <article class="final-boss-card">
         <small>FINAL BOSS · TRUE ENDING</small>
         <strong>${FINAL_BOSS.name}</strong>
-        <p>所有村庄工程、矿层推进、镐子、剑与护甲升级，最终都是为了击败它。生命 ${FINAL_BOSS.hp} · 攻击 ${FINAL_BOSS.damage} · 需要高战力与持续走位。</p>
+        <p>所有村庄工程、矿层推进、镐子、剑与护甲升级，最终都是为了击败它。生命 ${FINAL_BOSS.hp} · 攻击 ${FINAL_BOSS.damage} · 门槛很高，但战斗仍允许撤退、补给和反复挑战。</p>
         <div class="final-gate-list">
           ${requirements.map((requirement) => `
             <div class="final-gate-item ${requirement.met ? "done" : "missing"}">
