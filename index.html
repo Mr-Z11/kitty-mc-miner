@@ -8,10 +8,10 @@
       content="小猫挖矿 MC 版：挖方块、卖矿石、升级镐子和背包。"
     />
     <title>小猫挖矿 MC 版</title>
-    <link rel="stylesheet" href="./styles.css?v=15" />
+    <link rel="stylesheet" href="./styles.css?v=16" />
     <script defer src="./game-data.js?v=8"></script>
     <script defer src="./cave-game.js?v=19"></script>
-    <script defer src="./game.js?v=18"></script>
+    <script defer src="./game.js?v=19"></script>
   </head>
   <body>
     <div class="screen-noise" aria-hidden="true"></div>
@@ -339,69 +339,77 @@
             <span class="panel-tag shop-tag">营业中</span>
           </div>
 
-          <section class="shop-section mine-level-section">
-            <div class="section-title">
+          <details class="shop-section shop-collapsible mine-level-section" open>
+            <summary class="section-title">
               <h3>矿层图鉴</h3>
               <small>共 <b id="mineLevelCount">5</b> 层区域 · 资源预览</small>
-            </div>
+            </summary>
             <div class="mine-level-list" id="mineLevelList"></div>
-          </section>
+          </details>
 
-          <section class="shop-section">
-            <div class="section-title">
-              <h3>镐子升级</h3>
-              <small>仅提升挖掘力</small>
+          <details class="shop-section shop-collapsible material-market-section" open>
+            <summary class="section-title">
+              <h3>材料交易</h3>
+              <small>附魔材料 · 买卖补缺</small>
+            </summary>
+            <div class="material-market-intro">
+              <strong>附魔材料柜</strong>
+              <small>普通材料仍以挖矿为主；红石、青金石、黄金、绿宝石、紫水晶、钻石发现后可在这里买入。</small>
+            </div>
+            <div class="material-market-list" id="materialTradeList"></div>
+          </details>
+
+          <details class="shop-section shop-collapsible">
+            <summary class="section-title">
+              <h3>矿具升级</h3>
+              <small>镐力、耐久、背包、矿灯</small>
+            </summary>
+            <div class="shop-subsection">
+              <span>镐子升级</span>
+              <small>提升挖掘力</small>
             </div>
             <div class="shop-list" id="toolShop"></div>
-          </section>
-
-          <section class="shop-section">
-            <div class="section-title">
-              <h3>耐久维护</h3>
+            <div class="shop-subsection">
+              <span>耐久维护</span>
               <small>独立提升上限</small>
             </div>
             <div class="shop-list" id="durabilityShop"></div>
-          </section>
-
-          <section class="shop-section">
-            <div class="section-title">
-              <h3>背包升级</h3>
+            <div class="shop-subsection">
+              <span>背包升级</span>
               <small>装得更多</small>
             </div>
             <div class="shop-list" id="packShop"></div>
-          </section>
-
-          <section class="shop-section workshop-section">
-            <div class="section-title">
-              <h3>矿灯改装</h3>
+            <div class="shop-subsection">
+              <span>矿灯改装</span>
               <small>照亮深层，提高稀有发现</small>
             </div>
             <div class="shop-list" id="lanternShop"></div>
-          </section>
+          </details>
 
-          <section class="shop-section workshop-section">
-            <div class="section-title">
-              <h3>剑转换台</h3>
+          <details class="shop-section shop-collapsible">
+            <summary class="section-title">
+              <h3>战斗装备</h3>
+              <small>剑转换、护甲锻造</small>
+            </summary>
+            <div class="shop-subsection">
+              <span>剑转换台</span>
               <small>逐级提升品质</small>
             </div>
             <div class="shop-list" id="swordShop"></div>
-          </section>
-
-          <section class="shop-section">
-            <div class="section-title">
-              <h3>护甲锻造</h3>
+            <div class="shop-subsection">
+              <span>护甲锻造</span>
               <small>头盔、胸甲、护腿、靴子</small>
             </div>
             <div class="shop-list" id="armorShop"></div>
-          </section>
+          </details>
 
-          <section class="shop-section workshop-section">
-            <div class="section-title">
-              <h3>矿工工坊</h3>
-              <small>永久强化</small>
-            </div>
+          <details class="shop-section shop-collapsible">
+            <summary class="section-title">
+              <h3>附魔强化</h3>
+              <small>永久强化 · 消耗金币</small>
+            </summary>
             <div class="shop-list" id="perkShop"></div>
-          </section>
+          </details>
         </aside>
       </main>
 
@@ -422,7 +430,7 @@
           <button class="square-button" id="closeCaveShop" type="button" aria-label="关闭矿洞补给站">×</button>
         </header>
         <section class="cave-shop-content">
-          <p>不必返回村庄。用金币补充体力、维护镐子，用材料回血，也可以按需购买或出售材料。</p>
+          <p>不必返回村庄。这里专门处理即时补给：用金币补充体力、维护镐子，用材料回血；材料买卖已移到右侧矿洞商店。</p>
           <div class="cave-supply-list" id="caveSupplyList"></div>
         </section>
       </div>

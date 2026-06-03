@@ -1907,9 +1907,54 @@ kbd {
   margin-top: 15px;
 }
 
+.shop-collapsible {
+  padding: 9px;
+  border: 2px solid rgba(22, 39, 32, 0.95);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 50%, transparent 50%) 0 0 / 8px 8px,
+    rgba(11, 22, 18, 0.26);
+}
+
+.shop-collapsible[open] {
+  border-color: rgba(119, 145, 88, 0.52);
+}
+
+.shop-collapsible > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.shop-collapsible:not([open]) > summary {
+  margin-bottom: 0;
+}
+
+.shop-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.shop-collapsible > summary::after {
+  content: "+";
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #17231d;
+  font-size: 13px;
+  font-weight: 900;
+  background: #c9e85a;
+  box-shadow: 3px 3px #101c17;
+}
+
+.shop-collapsible[open] > summary::after {
+  content: "−";
+  background: #f4c85c;
+}
+
 .section-title {
   justify-content: space-between;
   margin-bottom: 8px;
+  gap: 8px;
 }
 
 .section-title h3 {
@@ -1925,6 +1970,93 @@ kbd {
 .shop-list {
   display: grid;
   gap: 6px;
+}
+
+.shop-subsection {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0 6px;
+  padding: 5px 7px;
+  color: #f0d89a;
+  border-left: 3px solid #b88a40;
+  background: rgba(96, 68, 33, 0.22);
+}
+
+.shop-subsection:first-of-type {
+  margin-top: 0;
+}
+
+.shop-subsection span {
+  color: #f5e5b9;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.shop-subsection small {
+  color: #9fb4a6;
+  font-size: 7px;
+}
+
+.material-market-intro {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 8px;
+  color: #ffe7a8;
+  border: 2px dashed rgba(255, 221, 122, 0.36);
+  background: rgba(100, 75, 34, 0.17);
+}
+
+.material-market-intro strong {
+  font-size: 10px;
+}
+
+.material-market-intro small {
+  color: #aebfaf;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.material-market-list {
+  display: grid;
+  gap: 6px;
+}
+
+.material-market-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 54px;
+  padding: 7px;
+  border: 2px solid #14231e;
+  background: rgba(9, 17, 14, 0.32);
+}
+
+.material-market-item.enchant-material {
+  border-color: rgba(188, 139, 70, 0.42);
+  background:
+    linear-gradient(135deg, rgba(255, 211, 103, 0.07) 25%, transparent 25%) 0 0 / 10px 10px,
+    rgba(31, 28, 19, 0.48);
+}
+
+.material-market-item.undiscovered {
+  opacity: 0.72;
+}
+
+.material-market-item .mini-block {
+  width: 24px;
+  height: 24px;
+  box-shadow: inset -5px -5px rgba(12, 17, 15, 0.22), 3px 3px #101b17;
+}
+
+.shop-copy strong em {
+  display: inline-block;
+  margin-left: 4px;
+  color: #d9ff72;
+  font-size: 7px;
+  font-style: normal;
 }
 
 .shop-item {
@@ -1960,11 +2092,6 @@ kbd {
 .shop-item-icon.durability-icon {
   color: #f5e4a3;
   background: #63765f;
-}
-
-.workshop-section {
-  padding-top: 13px;
-  border-top: 2px dashed rgba(196, 222, 145, 0.22);
 }
 
 .shop-copy {
@@ -3140,6 +3267,69 @@ kbd {
   background: rgba(8, 17, 14, 0.38);
 }
 
+.mine-atlas-all {
+  border: 2px solid #162a23;
+  background: rgba(7, 16, 13, 0.24);
+}
+
+.mine-atlas-all > summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  cursor: pointer;
+  color: #f4d68b;
+  list-style: none;
+}
+
+.mine-atlas-all > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mine-atlas-all > summary::after {
+  content: "+";
+  display: grid;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 18px;
+  height: 18px;
+  align-self: center;
+  place-items: center;
+  color: #16231d;
+  font-size: 12px;
+  font-weight: 900;
+  background: #d0ea64;
+}
+
+.mine-atlas-all[open] > summary::after {
+  content: "−";
+  background: #f3bd55;
+}
+
+.mine-atlas-all span,
+.mine-atlas-all small {
+  display: block;
+  grid-column: 1;
+}
+
+.mine-atlas-all span {
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.mine-atlas-all small {
+  margin-top: 3px;
+  color: #95aa9c;
+  font-size: 7px;
+}
+
+.mine-atlas-grid {
+  display: grid;
+  gap: 8px;
+  padding: 0 8px 8px;
+}
+
 .mine-level-item {
   display: grid;
   gap: 7px;
@@ -3511,6 +3701,15 @@ kbd {
 
   .cave-supply-item {
     grid-template-columns: auto 1fr;
+  }
+
+  .material-market-item {
+    grid-template-columns: auto 1fr;
+  }
+
+  .material-market-item .trade-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
   }
 
   .cave-supply-item .buy-button {

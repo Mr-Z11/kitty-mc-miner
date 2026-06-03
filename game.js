@@ -161,6 +161,7 @@ const FINAL_BOSS_REQUIREMENTS = {
 };
 
 const BUYABLE_SPECIAL_MATERIALS = new Set(["redstone", "lapis", "gold", "emerald", "amethyst", "diamond"]);
+const MATERIAL_MARKET_ORDER = ["redstone", "lapis", "gold", "emerald", "amethyst", "diamond"];
 const BASE_STAMINA = 5;
 const BASE_COMBAT_HEALTH = 5;
 const LEVEL_STAMINA_INTERVAL = 3;
@@ -395,6 +396,7 @@ const dom = {
   durabilityShop: document.querySelector("#durabilityShop"),
   packShop: document.querySelector("#packShop"),
   lanternShop: document.querySelector("#lanternShop"),
+  materialTradeList: document.querySelector("#materialTradeList"),
   swordShop: document.querySelector("#swordShop"),
   armorShop: document.querySelector("#armorShop"),
   perkShop: document.querySelector("#perkShop"),
@@ -1028,6 +1030,7 @@ function renderAll() {
   renderStats();
   renderInventory();
   renderMineLevels();
+  renderMaterialMarket();
   renderShop();
   renderVillage();
   renderRepairStation();
@@ -1186,33 +1189,6 @@ function renderCaveShop() {
   const healthFull = !caveStatus || caveStatus.hp >= caveStatus.maxHp;
   const healthKitMissing = missingRequirementLabel(HEALTH_KIT_RECIPE);
   const durabilityFull = state.pickaxeDurability >= maxPickaxeDurability();
-  const backpackFull = inventoryTotal() >= BACKPACKS[state.backpackIndex].capacity;
-  const materialTrades = Object.entries(MATERIALS)
-    .filter(([type]) => state.discoveries.materials[type])
-    .map(([type, material]) => {
-      const buyable = BUYABLE_SPECIAL_MATERIALS.has(type);
-      const buyPrice = material.value * 3;
-      return `
-        <article class="cave-supply-item material-trade-item">
-          <i class="mini-block" style="${miniBlockStyle(type)}" aria-hidden="true"></i>
-          <div class="cave-supply-copy">
-            <strong>${material.name}</strong>
-            <small>来源：${material.origin} · ${buyable ? `特殊材料可买入 ${buyPrice}¢` : "普通材料只能挖矿获得"} · 卖出 ${material.value}¢</small>
-          </div>
-          <div class="trade-actions">
-            ${buyable ? `
-              <button class="buy-button" type="button" data-buy-cave-material="${type}" ${backpackFull || state.coins < buyPrice ? "disabled" : ""}>
-                ${backpackFull ? "背包已满" : state.coins < buyPrice ? missingCoinsLabel(buyPrice) : `买入 ${buyPrice}¢`}
-              </button>
-            ` : `<span class="trade-note">挖矿获取</span>`}
-            <button class="buy-button sell-trade-button" type="button" data-sell-cave-material="${type}" ${state.inventory[type] <= 0 ? "disabled" : ""}>
-              卖出 ${material.value}¢
-            </button>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
 
   dom.caveSupplyList.innerHTML = `
     <article class="cave-supply-item">
@@ -1255,12 +1231,49 @@ function renderCaveShop() {
         ${sellValue > 0 ? `+ ${sellValue.toLocaleString("zh-CN")} ¢` : "背包为空"}
       </button>
     </article>
-    <div class="trade-divider">
-      <strong>材料交易</strong>
-      <small>普通材料只能挖矿获得；特殊材料发现后可在补给站少量买入，方便后期补缺口。</small>
-    </div>
-    ${materialTrades}
   `;
+}
+
+function renderMaterialMarket() {
+  const backpackFull = inventoryTotal() >= BACKPACKS[state.backpackIndex].capacity;
+  dom.materialTradeList.innerHTML = MATERIAL_MARKET_ORDER
+    .filter((type) => MATERIALS[type] && (state.discoveries.materials[type] || BUYABLE_SPECIAL_MATERIALS.has(type)))
+    .map((type) => {
+      const material = MATERIALS[type];
+      const buyable = BUYABLE_SPECIAL_MATERIALS.has(type);
+      const discovered = state.discoveries.materials[type];
+      const buyPrice = material.value * 3;
+      const canBuy = buyable && discovered && !backpackFull && state.coins >= buyPrice;
+      const buyLabel = !buyable
+        ? "挖矿获取"
+        : !discovered
+          ? "待发现"
+          : backpackFull
+            ? "背包已满"
+            : state.coins < buyPrice
+              ? missingCoinsLabel(buyPrice)
+              : `买入 ${buyPrice}¢`;
+      return `
+        <article class="material-market-item ${buyable ? "enchant-material" : ""} ${discovered ? "" : "undiscovered"}">
+          <i class="mini-block" style="${miniBlockStyle(type)}" aria-hidden="true"></i>
+          <div class="shop-copy">
+            <strong>${material.name} <em>${buyable ? "附魔材料" : "基础材料"}</em></strong>
+            <small>${discovered ? `来源：${material.origin}` : `未发现 · ${material.origin}`} · 卖出 ${material.value}¢</small>
+          </div>
+          <div class="trade-actions">
+            ${buyable ? `
+              <button class="buy-button" type="button" data-buy-shop-material="${type}" ${canBuy ? "" : "disabled"}>
+                ${buyLabel}
+              </button>
+            ` : `<span class="trade-note">挖矿获取</span>`}
+            <button class="buy-button sell-trade-button" type="button" data-sell-shop-material="${type}" ${state.inventory[type] <= 0 ? "disabled" : ""}>
+              卖出 ${material.value}¢
+            </button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
 }
 
 function renderMineLevels() {
@@ -1341,7 +1354,13 @@ function renderMineLevels() {
   dom.mineLevelList.innerHTML = `
     ${nextCard}
     <div class="mine-atlas-note">掉落比例按普通挖矿权重估算；幸运附魔、矿灯宝箱和短局探险会带来额外收益。</div>
-    ${zoneCards}
+    <details class="mine-atlas-all">
+      <summary>
+        <span>展开全部矿层资源表</span>
+        <small>${ZONES.length} 层区域 · 含深层门槛</small>
+      </summary>
+      <div class="mine-atlas-grid">${zoneCards}</div>
+    </details>
   `;
 }
 
@@ -2290,7 +2309,7 @@ function buyCaveMaterial(type) {
   state.coins -= price;
   state.inventory[type] += 1;
   showToast(`购买 1 块${material.name}，支付 ${price} 金币。`);
-  logEvent(`补给站送来 1 块${material.name}。`);
+  logEvent(`矿洞商店补齐了 1 块${material.name}。`);
   playTone("coin");
   renderAll();
   saveGame();
@@ -3054,10 +3073,12 @@ dom.closeCaveShop.addEventListener("click", closeCaveShop);
 dom.caveSupplyList.addEventListener("click", (event) => {
   const supplyButton = event.target.closest("[data-buy-cave-supply]");
   if (supplyButton) buyCaveSupply(supplyButton.dataset.buyCaveSupply);
-  const buyMaterialButton = event.target.closest("[data-buy-cave-material]");
-  if (buyMaterialButton) buyCaveMaterial(buyMaterialButton.dataset.buyCaveMaterial);
-  const sellMaterialButton = event.target.closest("[data-sell-cave-material]");
-  if (sellMaterialButton) sellMaterial(sellMaterialButton.dataset.sellCaveMaterial);
+});
+dom.materialTradeList.addEventListener("click", (event) => {
+  const buyMaterialButton = event.target.closest("[data-buy-shop-material]");
+  if (buyMaterialButton) buyCaveMaterial(buyMaterialButton.dataset.buyShopMaterial);
+  const sellMaterialButton = event.target.closest("[data-sell-shop-material]");
+  if (sellMaterialButton) sellMaterial(sellMaterialButton.dataset.sellShopMaterial);
 });
 dom.inventoryList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-sell-material]");
