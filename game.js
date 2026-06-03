@@ -13,6 +13,7 @@ const {
   TOOLS,
   BACKPACKS,
   LANTERNS,
+  DEPTH_GATES,
   ROUTES,
   EXPEDITION_EVENT_WEIGHTS,
   environmentForDepth,
@@ -162,7 +163,7 @@ const FINAL_BOSS_REQUIREMENTS = {
 const BUYABLE_SPECIAL_MATERIALS = new Set(["redstone", "lapis", "gold", "emerald", "amethyst", "diamond"]);
 const BASE_STAMINA = 5;
 const BASE_COMBAT_HEALTH = 5;
-const LEVEL_VITALITY_INTERVAL = 3;
+const LEVEL_STAMINA_INTERVAL = 3;
 const STAMINA_RESTORE_AMOUNT = 2;
 const HEALTH_KIT_RESTORE = 2;
 const HEALTH_REVIVE_AMOUNT = 3;
@@ -587,6 +588,41 @@ function depthAccessIssue(depth) {
   return "";
 }
 
+function zoneDepthLabel(zone) {
+  return zone.to === Infinity ? `${zone.from}m+` : `${zone.from}-${zone.to}m`;
+}
+
+function zoneRequirementLabel(zone) {
+  return zone.requiredToolIndex || zone.requiredLanternLevel
+    ? `${TOOLS[zone.requiredToolIndex].name} · ${LANTERNS[zone.requiredLanternLevel].name}`
+    : "初始开放";
+}
+
+function zoneNewMaterialTypes(zone) {
+  const earlierTypes = new Set(
+    ZONES
+      .filter((candidate) => candidate.from < zone.from)
+      .flatMap((candidate) => Object.keys(candidate.weights))
+  );
+  return Object.keys(zone.weights).filter((type) => !earlierTypes.has(type));
+}
+
+function zoneGateSummary(zone) {
+  const gates = DEPTH_GATES.filter((gate) => gate.depth >= zone.from && gate.depth <= zone.to);
+  if (!gates.length) return "";
+  return gates
+    .map((gate) => `${gate.depth}m 需${TOOLS[gate.toolIndex].name} · ${LANTERNS[gate.lanternLevel].name}`)
+    .join("；");
+}
+
+function nextZoneIssueLabel(zone) {
+  const chapter = activeStoryChapter();
+  if (chapter && zone.from > chapter.maxDepth) {
+    return `先修复${chapter.building.name}并击败${chapter.boss.name}`;
+  }
+  return depthAccessIssue(zone.from) || "门槛已满足";
+}
+
 function formatRequirement(cost) {
   return Object.entries(cost)
     .map(([type, amount]) => type === "coins" ? `${amount} 金币` : `${MATERIALS[type].name} × ${amount}`)
@@ -703,18 +739,22 @@ function caveSoupCost() {
   return 14 + accessibleDepth() * 2;
 }
 
-function levelVitalityBonus(level = playerLevel()) {
-  return Math.floor((Math.max(1, level) - 1) / LEVEL_VITALITY_INTERVAL);
+function levelStaminaBonus(level = playerLevel()) {
+  return Math.floor((Math.max(1, level) - 1) / LEVEL_STAMINA_INTERVAL);
+}
+
+function levelHealthBonus(level = playerLevel()) {
+  return Math.max(1, level) - 1;
 }
 
 function maxStamina() {
   return BASE_STAMINA
-    + levelVitalityBonus()
+    + levelStaminaBonus()
     + (isVillageBuilt("heartBeacon") ? 1 : 0);
 }
 
 function maxCombatHealth() {
-  return BASE_COMBAT_HEALTH + levelVitalityBonus();
+  return BASE_COMBAT_HEALTH + levelHealthBonus();
 }
 
 function staminaTopUpCost() {
@@ -874,19 +914,19 @@ function addXp(amount) {
   const oldMaxStamina = maxStamina();
   const oldMaxHealth = maxCombatHealth();
   const wasStaminaFull = state.stamina >= oldMaxStamina;
-  const oldCaveStatus = caveGame?.getStatus();
-  const wasHealthFull = oldCaveStatus ? oldCaveStatus.hp >= oldCaveStatus.maxHp : true;
   state.xp += amount;
   const newLevel = playerLevel();
   if (newLevel > oldLevel) {
     const newMaxStamina = maxStamina();
     const newMaxHealth = maxCombatHealth();
+    const healthGain = Math.max(0, newMaxHealth - oldMaxHealth);
     const gains = [];
     if (newMaxStamina > oldMaxStamina) gains.push(`体力上限 ${oldMaxStamina}→${newMaxStamina}`);
-    if (newMaxHealth > oldMaxHealth) gains.push(`血量上限 ${oldMaxHealth}→${newMaxHealth}`);
+    if (healthGain > 0) gains.push(`血量上限 ${oldMaxHealth}→${newMaxHealth}，当前血量 +${healthGain}`);
     if (wasStaminaFull) state.stamina = newMaxStamina;
     normalizeStamina();
-    caveGame?.syncPlayerVitals?.({ healToFull: wasHealthFull });
+    if (healthGain > 0) caveGame?.healPlayer?.(healthGain);
+    else caveGame?.syncPlayerVitals?.();
     showToast(`矿工等级提升至 Lv.${newLevel}！${gains.length ? gains.join("，") : ""}`);
     logEvent(`积累的经验有了回报，猫猫矿工升到了 Lv.${newLevel}。${gains.length ? gains.join("，") + "。" : ""}`);
     playTone("upgrade");
@@ -894,7 +934,7 @@ function addXp(amount) {
 }
 
 function maxAdventureHealth(supplied = state.expedition?.supplied) {
-  return 8 + levelVitalityBonus() + state.perks.armor + (supplied ? 2 : 0);
+  return 8 + levelStaminaBonus() + state.perks.armor + (supplied ? 2 : 0);
 }
 
 function routeById(routeId) {
@@ -1179,7 +1219,7 @@ function renderCaveShop() {
       <span class="cave-supply-icon" aria-hidden="true">⚡</span>
       <div class="cave-supply-copy">
         <strong>矿工热汤</strong>
-        <small>恢复 ${STAMINA_RESTORE_AMOUNT} 点体力，当前上限 ${maxStamina()}；等级每 ${LEVEL_VITALITY_INTERVAL} 级 +1。</small>
+        <small>恢复 ${STAMINA_RESTORE_AMOUNT} 点体力，当前上限 ${maxStamina()}；等级每 ${LEVEL_STAMINA_INTERVAL} 级 +1。</small>
       </div>
       <button class="buy-button" type="button" data-buy-cave-supply="soup" ${staminaFull || state.coins < soupCost ? "disabled" : ""}>
         ${staminaFull ? "体力已满" : state.coins < soupCost ? missingCoinsLabel(soupCost) : `${soupCost} ¢`}
@@ -1189,7 +1229,7 @@ function renderCaveShop() {
       <span class="cave-supply-icon" aria-hidden="true">♥</span>
       <div class="cave-supply-copy">
         <strong>战斗绷带</strong>
-        <small>消耗 ${formatRequirement(HEALTH_KIT_RECIPE)}，恢复 ${HEALTH_KIT_RESTORE} 点血量，当前上限 ${caveStatus?.maxHp ?? maxCombatHealth()}；等级每 ${LEVEL_VITALITY_INTERVAL} 级 +1。</small>
+        <small>消耗 ${formatRequirement(HEALTH_KIT_RECIPE)}，恢复 ${HEALTH_KIT_RESTORE} 点血量，当前上限 ${caveStatus?.maxHp ?? maxCombatHealth()}；矿工每升 1 级 +1。</small>
       </div>
       <button class="buy-button" type="button" data-buy-cave-supply="bandage" ${healthFull || Boolean(healthKitMissing) ? "disabled" : ""}>
         ${healthFull ? "血量已满" : healthKitMissing || "制作回血"}
@@ -1225,24 +1265,84 @@ function renderCaveShop() {
 
 function renderMineLevels() {
   dom.mineLevelCount.textContent = ZONES.length;
-  dom.mineLevelList.innerHTML = ZONES.map((zone, index) => {
+  const deepest = deepestDepthReached();
+  const nextZone = ZONES.find((zone) => deepest < zone.from);
+  const nextIssue = nextZone ? nextZoneIssueLabel(nextZone) : "";
+  const nextNewMaterials = nextZone ? zoneNewMaterialTypes(nextZone) : [];
+  const nextCard = nextZone
+    ? `
+      <article class="mine-atlas-next" style="--zone-color:${nextZone.color}">
+        <span class="mine-atlas-symbol">${nextZone.symbol}</span>
+        <div>
+          <strong>下一矿层：${nextZone.name}</strong>
+          <small>${nextZone.from}m 开始 · 还差 ${Math.max(0, nextZone.from - deepest)}m · ${nextIssue || "门槛已满足"}</small>
+          <em>新增资源：${nextNewMaterials.length
+            ? nextNewMaterials.map((type) => MATERIALS[type].name).join("、")
+            : MATERIALS[nextZone.rareMaterial].name}</em>
+        </div>
+      </article>
+    `
+    : `
+      <article class="mine-atlas-next complete" style="--zone-color:${currentZone().color}">
+        <span class="mine-atlas-symbol">◆</span>
+        <div>
+          <strong>已进入最后矿区：${currentZone().name}</strong>
+          <small>${zoneDepthLabel(currentZone())} · 继续下潜会遇到 50m、70m、90m 深层门槛</small>
+          <em>后续重点资源：绿宝石、紫水晶、钻石</em>
+        </div>
+      </article>
+    `;
+  const zoneCards = ZONES.map((zone, index) => {
     const active = currentZone().id === zone.id;
     const unlocked = deepestDepthReached() >= zone.from;
-    const depthLabel = zone.to === Infinity ? `${zone.from}m+` : `${zone.from}-${zone.to}m`;
-    const requirement = zone.requiredToolIndex || zone.requiredLanternLevel
-      ? `${TOOLS[zone.requiredToolIndex].name} · ${LANTERNS[zone.requiredLanternLevel].name}`
-      : "初始开放";
+    const totalWeight = Object.values(zone.weights).reduce((sum, weight) => sum + weight, 0);
+    const newMaterials = zoneNewMaterialTypes(zone);
+    const gateSummary = zoneGateSummary(zone);
+    const resourceChips = Object.entries(zone.weights)
+      .sort(([, left], [, right]) => right - left)
+      .map(([type, weight]) => {
+        const material = MATERIALS[type];
+        const chance = Math.round((weight / totalWeight) * 100);
+        const currentLocked = state.toolIndex < material.minToolIndex;
+        const entryLocked = zone.requiredToolIndex < material.minToolIndex;
+        const lockLabel = currentLocked
+          ? `需${TOOLS[material.minToolIndex].name}`
+          : entryLocked
+            ? `${TOOLS[material.minToolIndex].name}后稳定`
+            : "当前可挖";
+        return `
+          <span class="mine-resource-chip ${currentLocked ? "locked" : ""}">
+            <i class="mini-block" style="${miniBlockStyle(type)}" aria-hidden="true"></i>
+            <b>${material.name}</b>
+            <small>约${chance}% · ${lockLabel}</small>
+          </span>
+        `;
+      })
+      .join("");
     return `
       <div class="mine-level-item ${active ? "active" : ""} ${unlocked ? "unlocked" : ""}">
-        <span>${String(index + 1).padStart(2, "0")}</span>
-        <div>
-          <strong>${zone.name}</strong>
-          <small>${depthLabel} · ${requirement}</small>
+        <div class="mine-level-main">
+          <span class="mine-level-index">${String(index + 1).padStart(2, "0")}</span>
+          <div>
+            <strong>${zone.name}</strong>
+            <small>${zoneDepthLabel(zone)} · ${zoneRequirementLabel(zone)}</small>
+          </div>
+          <em>${active ? "当前" : unlocked ? "已开放" : "未开放"}</em>
         </div>
-        <em>${active ? "当前" : unlocked ? "已开放" : "未开放"}</em>
+        <p>${zone.description}</p>
+        <div class="mine-resource-list">${resourceChips}</div>
+        <footer>
+          <span>新增：${newMaterials.length ? newMaterials.map((type) => MATERIALS[type].name).join("、") : "延续上一矿层资源"}</span>
+          ${gateSummary ? `<span>深层门槛：${gateSummary}</span>` : ""}
+        </footer>
       </div>
     `;
   }).join("");
+  dom.mineLevelList.innerHTML = `
+    ${nextCard}
+    <div class="mine-atlas-note">掉落比例按普通挖矿权重估算；幸运附魔、矿灯宝箱和短局探险会带来额外收益。</div>
+    ${zoneCards}
+  `;
 }
 
 function renderVillage() {

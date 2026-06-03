@@ -71,6 +71,7 @@
         mineDirection: "right",
         attackUntil: 0,
       };
+      this.syncPlayerVitals({ healToFull: true });
       this.lastSafePosition = { x: this.player.x, y: this.player.y };
 
       this.bindControls();
