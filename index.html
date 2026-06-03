@@ -8,10 +8,10 @@
       content="小猫挖矿 MC 版：挖方块、卖矿石、升级镐子和背包。"
     />
     <title>小猫挖矿 MC 版</title>
-    <link rel="stylesheet" href="./styles.css?v=17" />
+    <link rel="stylesheet" href="./styles.css?v=18" />
     <script defer src="./game-data.js?v=8"></script>
     <script defer src="./cave-game.js?v=21"></script>
-    <script defer src="./game.js?v=20"></script>
+    <script defer src="./game.js?v=21"></script>
   </head>
   <body>
     <div class="screen-noise" aria-hidden="true"></div>
@@ -59,10 +59,6 @@
           <div class="stat-chip health-chip">
             <span class="stat-icon health-icon">♥</span>
             <div><small>血量</small><strong id="topHealth">♥ ♥ ♥ ♥ ♥</strong></div>
-          </div>
-          <div class="stat-chip stamina-chip">
-            <span class="stat-icon stamina-icon">⚡</span>
-            <div><small>体力</small><strong id="topStamina">5 / 5</strong></div>
           </div>
           <div class="stat-chip">
             <span class="stat-icon depth-icon">↓</span>
@@ -150,7 +146,7 @@
         <div class="briefing-priority">
           <span>推荐优先级</span>
           <strong>主线材料 → 镐力与耐久 → 剑甲备战 → 终极 Boss</strong>
-          <small>主矿洞每挖 4 个方块消耗 1 点体力，体力不足不会重置；怪物攻击才会扣血。补给站可买体力，也可用材料回血。</small>
+          <small>主矿洞挖矿不再消耗额外资源；怪物攻击才会扣血。补给站可维护镐子，也可用材料回血。</small>
         </div>
       </section>
 
@@ -260,10 +256,6 @@
                 <strong id="caveHealth">5 / 5</strong>
               </div>
               <div class="cave-hud-row">
-                <span class="cave-hud-label">体力</span>
-                <strong id="caveStamina">5 / 5</strong>
-              </div>
-              <div class="cave-hud-row">
                 <span class="cave-hud-label">镐耐久</span>
                 <strong id="caveDurability">18 / 18</strong>
               </div>
@@ -296,7 +288,7 @@
 
           <div class="mine-footer">
             <div>
-              <p><b>操控小猫探索矿洞</b>，方向键移动，按 <b>E</b> 挖矿。每挖 4 个方块消耗 1 点体力；怪物攻击扣血，补给站可购买体力或用材料回血。</p>
+              <p><b>操控小猫探索矿洞</b>，方向键移动，按 <b>E</b> 挖矿。挖矿不消耗额外资源；怪物攻击扣血，补给站可维护镐子或用材料回血。</p>
               <div class="key-hints">
                 <span><kbd>S</kbd> 出售</span>
                 <span><kbd>M</kbd> 音频静音</span>
@@ -315,7 +307,7 @@
                 <span class="mine-action-icon">▣</span>
                 <span>
                   <b>矿洞补给站</b>
-                  <small>热汤 · 修理 · 售卖</small>
+                  <small>回血 · 修理 · 售卖</small>
                 </span>
               </button>
               <button class="repair-trigger" id="repairPickaxe" type="button">
@@ -434,7 +426,7 @@
           <button class="square-button" id="closeCaveShop" type="button" aria-label="关闭矿洞补给站">×</button>
         </header>
         <section class="cave-shop-content">
-          <p>不必返回村庄。这里专门处理即时补给：用金币补充体力、维护镐子，用材料回血；材料买卖已移到右侧矿洞商店。</p>
+          <p>不必返回村庄。这里专门处理即时补给：维护镐子、用材料回血；材料买卖已移到右侧矿洞商店。</p>
           <div class="cave-supply-list" id="caveSupplyList"></div>
         </section>
       </div>
@@ -452,7 +444,7 @@
 
         <section class="route-select" id="routeSelect">
           <div class="adventure-intro">
-            <p>带上矿灯，选择一条路线。每次行动消耗 1 点体力，途中可以随时撤离并保留战利品。免费出发最多保留 2 次，每挖 12 个方块恢复 1 次；也可以消耗 1 张探险券补给出发并获得额外体力。</p>
+            <p>带上矿灯，选择一条路线。每次行动消耗 1 点探险生命，途中可以随时撤离并保留战利品。免费出发最多保留 2 次，每挖 12 个方块恢复 1 次；也可以消耗 1 张探险券补给出发并获得额外生命。</p>
             <strong><span id="modalFreeExpeditionCount">2</span> / 2 次免费 · <span id="modalTicketCount">3</span> / 3 探险券</strong>
           </div>
           <div class="route-list" id="routeList"></div>
@@ -465,7 +457,7 @@
               <h3 id="expeditionRouteName">废弃矿道</h3>
             </div>
             <div class="expedition-health">
-              <small>体力</small>
+              <small>生命</small>
               <strong id="expeditionHealth">♥ ♥ ♥</strong>
             </div>
           </div>

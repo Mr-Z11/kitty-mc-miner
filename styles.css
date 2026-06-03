@@ -338,24 +338,10 @@ h3 {
   min-width: 162px;
 }
 
-.stamina-chip {
-  min-width: 108px;
-}
-
-.stamina-icon {
-  color: #34451f;
-  background: #d4ef62;
-  box-shadow: inset -4px -4px 0 #8dac38;
-}
-
 #topHealth {
   color: #ef836d;
   font-size: 12px;
   letter-spacing: 1px;
-}
-
-#topStamina {
-  color: #d8ff72;
 }
 
 .level-chip > div {
