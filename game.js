@@ -131,9 +131,33 @@ const STORY_CHAPTERS = [
       cost: { gold: 24, diamond: 12, coins: 980 },
     },
     boss: { id: "crystal-colossus", name: "黑暗晶体巨像", color: "#62d7d4", hp: 260, damage: 6, reward: 1600, xp: 320 },
-    unlock: "自由深渊模式",
+    unlock: "终焉祭坛",
   },
 ];
+
+const FINAL_BOSS = {
+  id: "abyss-heart-overlord",
+  name: "地心终焉龙",
+  color: "#cf5d74",
+  hp: 920,
+  damage: 6,
+  reward: 5200,
+  xp: 1100,
+  marks: 6,
+  size: 74,
+  speedMultiplier: 1.42,
+  finalBoss: true,
+};
+
+const FINAL_BOSS_REQUIREMENTS = {
+  depth: 50,
+  toolDamage: 14,
+  swordDamage: 17,
+  armor: 14,
+  durability: 48,
+  level: 10,
+  lanternLevel: 4,
+};
 
 const ABYSS_CONTRACT_MATERIALS = ["iron", "gold", "diamond"];
 
@@ -265,7 +289,7 @@ const defaultVillage = () => Object.fromEntries(
 );
 
 const initialState = () => ({
-  saveVersion: 7,
+  saveVersion: 8,
   coins: 0,
   depth: 1,
   maxDepthReached: 1,
@@ -294,6 +318,7 @@ const initialState = () => ({
   storyChapter: 0,
   village: defaultVillage(),
   defeatedBosses: [],
+  finalBossDefeated: false,
   abyssContract: null,
   abyssContractsCompleted: 0,
   abyssBossesDefeated: 0,
@@ -309,6 +334,7 @@ const initialState = () => ({
 
 let state = loadGame();
 normalizeStoryState();
+normalizeFinalBossState();
 normalizeAbyssState();
 normalizeDurabilityLevel();
 normalizeCollections();
@@ -502,7 +528,11 @@ function normalizeAbyssState() {
   state.abyssBossesDefeated = Math.max(0, Number(state.abyssBossesDefeated) || 0);
   state.abyssMarks = Math.max(0, Number(state.abyssMarks) || 0);
   state.beaconResonance = Math.max(0, Math.min(MAX_BEACON_RESONANCE, Number(state.beaconResonance) || 0));
-  if (storyCompleted() && !state.abyssContract) state.abyssContract = createAbyssContract();
+  if (finalVictory() && !state.abyssContract) state.abyssContract = createAbyssContract();
+}
+
+function normalizeFinalBossState() {
+  state.finalBossDefeated = Boolean(state.finalBossDefeated || state.defeatedBosses.includes(FINAL_BOSS.id));
 }
 
 function activeStoryChapter() {
@@ -511,6 +541,10 @@ function activeStoryChapter() {
 
 function storyCompleted() {
   return state.storyChapter >= STORY_CHAPTERS.length;
+}
+
+function finalVictory() {
+  return Boolean(state.finalBossDefeated);
 }
 
 function isVillageBuilt(buildingId) {
@@ -714,6 +748,83 @@ function playerLevel() {
   let level = 1;
   while (state.xp >= xpForLevel(level + 1)) level += 1;
   return level;
+}
+
+function finalBossRequirements() {
+  return [
+    {
+      id: "depth",
+      label: "最深深度",
+      current: deepestDepthReached(),
+      required: FINAL_BOSS_REQUIREMENTS.depth,
+      unit: "m",
+      hint: "继续下潜，抵达终焉祭坛",
+    },
+    {
+      id: "tool",
+      label: "镐力",
+      current: TOOLS[state.toolIndex].damage,
+      required: FINAL_BOSS_REQUIREMENTS.toolDamage,
+      unit: "",
+      hint: "升级至红石动力镐或更强镐子",
+    },
+    {
+      id: "sword",
+      label: "武器攻击",
+      current: currentSword().damage,
+      required: FINAL_BOSS_REQUIREMENTS.swordDamage,
+      unit: "",
+      hint: "剑转换台升级至钻石剑",
+    },
+    {
+      id: "armor",
+      label: "总护甲",
+      current: armorScore(),
+      required: FINAL_BOSS_REQUIREMENTS.armor,
+      unit: "",
+      hint: "锻造高阶头盔、胸甲、护腿和靴子",
+    },
+    {
+      id: "durability",
+      label: "镐耐久上限",
+      current: maxPickaxeDurability(),
+      required: FINAL_BOSS_REQUIREMENTS.durability,
+      unit: "",
+      hint: "提升耐久维护，确保终局前能持续推进",
+    },
+    {
+      id: "level",
+      label: "矿工等级",
+      current: playerLevel(),
+      required: FINAL_BOSS_REQUIREMENTS.level,
+      unit: "",
+      hint: "挖矿、击败怪物和 Boss 获取经验",
+    },
+    {
+      id: "lantern",
+      label: "矿灯等级",
+      current: state.lanternLevel,
+      required: FINAL_BOSS_REQUIREMENTS.lanternLevel,
+      unit: "",
+      hint: "改装矿灯至 Lv.4，照亮终焉入口",
+    },
+  ].map((requirement) => ({
+    ...requirement,
+    met: requirement.current >= requirement.required,
+    missing: Math.max(0, requirement.required - requirement.current),
+  }));
+}
+
+function finalBossReady() {
+  return storyCompleted() && finalBossRequirements().every((requirement) => requirement.met);
+}
+
+function finalBossGateText() {
+  const missing = finalBossRequirements().filter((requirement) => !requirement.met);
+  if (!missing.length) return "终局门槛已达成";
+  return missing
+    .map((requirement) => `${requirement.label}还差 ${requirement.missing}${requirement.unit}`)
+    .join("；");
 }
 
 function addXp(amount) {
@@ -1061,10 +1172,17 @@ function renderMineLevels() {
 function renderVillage() {
   const chapter = activeStoryChapter();
   const completed = !chapter;
-  dom.storyChapter.textContent = completed ? "主线完成" : `第 ${state.storyChapter + 1} 章 / ${STORY_CHAPTERS.length}`;
-  dom.storyTitle.textContent = completed ? "地心矿灯重新亮起" : chapter.title;
+  const victory = finalVictory();
+  dom.storyChapter.textContent = completed
+    ? victory ? "最终胜利" : "终局决战"
+    : `第 ${state.storyChapter + 1} 章 / ${STORY_CHAPTERS.length}`;
+  dom.storyTitle.textContent = completed
+    ? victory ? "地心矿灯彻底复燃" : "地心终焉龙苏醒"
+    : chapter.title;
   dom.storyDescription.textContent = completed
-    ? "猫猫村庄恢复了光亮。自由深渊模式已经开放，可以继续挑战更深的随机矿井。"
+    ? victory
+      ? "终极 Boss 已经倒下。猫猫村庄恢复了完整光亮，自由深渊模式已经开放。"
+      : "前五章打开了通往终焉祭坛的路。继续强化装备、武器和矿灯，准备击败真正让矿灯熄灭的源头。"
     : chapter.building.description;
 
   dom.villageStructures.innerHTML = STORY_CHAPTERS.map((story, index) => {
@@ -1084,7 +1202,37 @@ function renderVillage() {
     `;
   }).join("");
 
-  if (completed) {
+  if (completed && !victory) {
+    const requirements = finalBossRequirements();
+    const ready = requirements.every((requirement) => requirement.met);
+    const metCount = requirements.filter((requirement) => requirement.met).length;
+    const bossActive = caveGame?.hasActiveBoss();
+    dom.villageAction.innerHTML = `
+      <article class="final-boss-card">
+        <small>FINAL BOSS · TRUE ENDING</small>
+        <strong>${FINAL_BOSS.name}</strong>
+        <p>所有村庄工程、矿层推进、镐子、剑与护甲升级，最终都是为了击败它。生命 ${FINAL_BOSS.hp} · 攻击 ${FINAL_BOSS.damage} · 需要高战力与持续走位。</p>
+        <div class="final-gate-list">
+          ${requirements.map((requirement) => `
+            <div class="final-gate-item ${requirement.met ? "done" : "missing"}">
+              <span>${requirement.met ? "✓" : "!"}</span>
+              <div>
+                <strong>${requirement.label}</strong>
+                <small>当前 ${requirement.current}${requirement.unit} / 门槛 ${requirement.required}${requirement.unit}</small>
+                <em>${requirement.met ? "已达标" : requirement.hint}</em>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+        <button class="buy-button final-boss-button" type="button" data-summon-final-boss="${FINAL_BOSS.id}" ${!ready || bossActive ? "disabled" : ""}>
+          ${bossActive ? "终极 Boss 已进入矿洞" : ready ? `挑战${FINAL_BOSS.name}` : `门槛不足 ${metCount} / ${requirements.length}`}
+        </button>
+      </article>
+    `;
+    return;
+  }
+
+  if (completed && victory) {
     const contract = ensureAbyssContract();
     const material = MATERIALS[contract.material];
     const depthReady = state.depth >= contract.targetDepth;
@@ -1097,8 +1245,8 @@ function renderVillage() {
     dom.villageAction.innerHTML = `
       <div class="victory-banner">
         <span>★ VICTORY ★</span>
-        <strong>胜利！地心矿灯重新亮起</strong>
-        <small>五层主线矿洞已经全部净化，自由深渊模式正式开放。</small>
+        <strong>胜利！${FINAL_BOSS.name}已被击败</strong>
+        <small>终极 Boss 倒下后，地心矿灯彻底复燃，自由深渊模式正式开放。</small>
       </div>
       <div class="abyss-summary">
         <strong>深渊记录</strong>
@@ -1503,7 +1651,14 @@ function renderObjective() {
     return;
   }
 
-  if (storyCompleted()) {
+  if (storyCompleted() && !finalVictory()) {
+    dom.currentObjective.textContent = finalBossReady()
+      ? `终局：挑战${FINAL_BOSS.name}，赢下真正通关`
+      : `终局备战：${finalBossGateText()}`;
+    return;
+  }
+
+  if (finalVictory()) {
     const contract = ensureAbyssContract();
     const material = MATERIALS[contract.material];
     if (state.depth < contract.targetDepth) {
@@ -1518,7 +1673,7 @@ function renderObjective() {
     return;
   }
 
-  dom.currentObjective.textContent = "主线完成：地心矿灯已经重新亮起";
+  dom.currentObjective.textContent = "最终胜利：地心矿灯已经彻底重新亮起";
 }
 
 function renderSideObjective() {
@@ -1539,6 +1694,13 @@ function renderSideObjective() {
       return;
     }
     dom.sideObjective.textContent = `支线：完成${route.name}短局探险 ${expedition.step} / ${route.steps} 步 · 体力 ${expedition.hp} / ${maxAdventureHealth(expedition.supplied)}`;
+    return;
+  }
+
+  if (storyCompleted() && !finalVictory()) {
+    dom.sideObjective.textContent = finalBossReady()
+      ? `支线：终局门槛已达成，前往村庄召唤${FINAL_BOSS.name}`
+      : `支线：终极 Boss 门槛 - ${finalBossGateText()}`;
     return;
   }
 
@@ -1888,7 +2050,7 @@ function defeatCaveEnemy({ id, isBoss, name, coins, xp, marks = 0 }) {
   state.coins += coins;
   addXp(xp);
   if (isBoss) {
-    if (!completeStoryBoss(id)) completeAbyssBoss(id, marks);
+    if (!completeFinalBoss(id, marks) && !completeStoryBoss(id)) completeAbyssBoss(id, marks);
   } else {
     showToast(`击败${name}，获得 ${coins} 金币。`);
     logEvent(`${name}被击败，剑的品质正在改变矿洞里的生存方式。`);
@@ -1948,15 +2110,46 @@ function completeStoryBoss(bossId) {
   state.defeatedBosses.push(bossId);
   state.storyChapter += 1;
   const nextChapter = activeStoryChapter();
-  if (!nextChapter) ensureAbyssContract();
   showToast(nextChapter
     ? `区域净化完成：${chapter.unlock}已经开放！`
-    : "胜利！地心矿灯重新亮起，五层主线全部通关！自由深渊模式已开放。"
+    : `终局开启：${FINAL_BOSS.name}已经苏醒，继续提升战力后再挑战它。`
   );
   logEvent(nextChapter
     ? `${chapter.boss.name}倒下了。${chapter.unlock}的道路已经打开，村庄等待下一项修复工程。`
-    : "黑暗晶体巨像崩解，地心信标照亮了猫猫村庄。新的深渊挑战仍在地下等待。"
+    : `${chapter.boss.name}倒下了，但熄灭矿灯的真正源头仍在终焉祭坛。所有升级目标都指向最终战。`
   );
+  return true;
+}
+
+function summonFinalBoss(bossId) {
+  if (!storyCompleted() || finalVictory() || bossId !== FINAL_BOSS.id) return;
+  if (!caveGame || caveGame.hasActiveBoss()) {
+    showToast("已有 Boss 进入矿洞。");
+    return;
+  }
+  if (!finalBossReady()) {
+    showToast(`终极 Boss 门槛不足：${finalBossGateText()}。`);
+    logEvent("终局祭坛拒绝开启：继续提升深度、武器、护甲、矿灯和等级。");
+    playTone("error");
+    return;
+  }
+
+  caveGame.spawnBoss(FINAL_BOSS);
+  showToast(`${FINAL_BOSS.name}降临矿洞！这是最终通关战。`);
+  logEvent(`终局警报：${FINAL_BOSS.name}出现。保持距离，使用最强武器反复攻击。`);
+  playTone("error");
+  renderAll();
+}
+
+function completeFinalBoss(bossId, marks) {
+  if (bossId !== FINAL_BOSS.id || finalVictory()) return false;
+
+  state.finalBossDefeated = true;
+  state.defeatedBosses.push(bossId);
+  state.abyssMarks += marks;
+  ensureAbyssContract();
+  showToast(`最终胜利！${FINAL_BOSS.name}倒下，地心矿灯彻底复燃。`);
+  logEvent(`${FINAL_BOSS.name}被击败。猫猫村庄真正获救，自由深渊模式现在开放。`);
   return true;
 }
 
@@ -1972,7 +2165,7 @@ function completeAbyssBoss(bossId, marks) {
 }
 
 function completeAbyssContract() {
-  if (!storyCompleted()) return;
+  if (!finalVictory()) return;
   const contract = ensureAbyssContract();
   if (state.depth < contract.targetDepth) {
     showToast(`还需要继续下潜至 ${contract.targetDepth}m。`);
@@ -2000,7 +2193,7 @@ function completeAbyssContract() {
 }
 
 function rerollAbyssContract() {
-  if (!storyCompleted()) return;
+  if (!finalVictory()) return;
   const cost = abyssContractRerollCost();
   if (state.coins < cost) {
     showToast(`更换委托需要 ${cost} 金币，还差 ${cost - state.coins} 金币。`);
@@ -2018,7 +2211,7 @@ function rerollAbyssContract() {
 }
 
 function summonAbyssBoss(bossId) {
-  if (!storyCompleted()) return;
+  if (!finalVictory()) return;
   const boss = abyssBossForLevel();
   if (boss.id !== bossId) return;
   if (!caveGame || caveGame.hasActiveBoss()) {
@@ -2034,7 +2227,7 @@ function summonAbyssBoss(bossId) {
 }
 
 function upgradeBeaconResonance() {
-  if (!storyCompleted() || state.beaconResonance >= MAX_BEACON_RESONANCE) return;
+  if (!finalVictory() || state.beaconResonance >= MAX_BEACON_RESONANCE) return;
   const cost = beaconResonanceCost();
   if (state.abyssMarks < cost) {
     showToast(`还差 ${cost - state.abyssMarks} 枚深渊徽记。`);
@@ -2627,6 +2820,8 @@ dom.villageAction.addEventListener("click", (event) => {
   if (repairButton) repairVillageBuilding(repairButton.dataset.repairBuilding);
   const bossButton = event.target.closest("[data-summon-boss]");
   if (bossButton) summonStoryBoss(bossButton.dataset.summonBoss);
+  const finalBossButton = event.target.closest("[data-summon-final-boss]");
+  if (finalBossButton) summonFinalBoss(finalBossButton.dataset.summonFinalBoss);
   const contractButton = event.target.closest("[data-complete-abyss-contract]");
   if (contractButton) completeAbyssContract();
   const rerollButton = event.target.closest("[data-reroll-abyss-contract]");

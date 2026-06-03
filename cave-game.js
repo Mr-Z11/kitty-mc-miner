@@ -196,13 +196,14 @@
       if (!boss || this.hasActiveBoss()) return false;
       const x = clamp(this.player.x + 190, 48, WORLD_COLUMNS * TILE - 64);
       const y = clamp(this.player.y - 36, 84, WORLD_ROWS * TILE - 58);
+      const size = boss.size || 52;
       this.enemies.push({
         ...boss,
         isBoss: true,
         x,
         y,
-        w: 52,
-        h: 52,
+        w: size,
+        h: size,
         maxHp: boss.hp,
         vx: 0,
         vy: 0,
@@ -313,8 +314,10 @@
         const patrolY = enemy.homeY + Math.cos(timestamp / 700 + enemy.phase) * 28;
         const targetX = alerted ? this.player.x : patrolX;
         const targetY = alerted ? this.player.y : patrolY;
-        const speed = (alerted ? 58 : 24) * (enemy.isBoss ? 1.18 : 1);
-        const verticalSpeed = (alerted ? 52 : 20) * (enemy.isBoss ? 1.12 : 1);
+        const bossSpeed = enemy.speedMultiplier || (enemy.isBoss ? 1.18 : 1);
+        const bossVerticalSpeed = enemy.speedMultiplier || (enemy.isBoss ? 1.12 : 1);
+        const speed = (alerted ? 58 : 24) * bossSpeed;
+        const verticalSpeed = (alerted ? 52 : 20) * bossVerticalSpeed;
         enemy.vx += (clamp(targetX - enemy.x, -speed, speed) - enemy.vx) * Math.min(1, delta * 4.5);
         enemy.vy += (clamp(targetY - enemy.y, -verticalSpeed, verticalSpeed) - enemy.vy) * Math.min(1, delta * 4.5);
         enemy.x = clamp(enemy.x + enemy.vx * delta, 12, WORLD_COLUMNS * TILE - enemy.w - 12);
@@ -738,6 +741,14 @@
 
     drawEnemy(ctx, enemy, timestamp) {
       if (enemy.isBoss) {
+        if (enemy.finalBoss) {
+          ctx.save();
+          ctx.globalAlpha = 0.24;
+          ctx.fillStyle = "#cf5d74";
+          ctx.fillRect(enemy.x - 12, enemy.y - 12, enemy.w + 24, enemy.h + 24);
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
         ctx.fillStyle = "#e7c968";
         ctx.fillRect(enemy.x + 7, enemy.y - 14, enemy.w - 14, 7);
         ctx.fillRect(enemy.x + 11, enemy.y - 20, 7, 7);
