@@ -6,6 +6,7 @@
   const WORLD_COLUMNS = 112;
   const WORLD_ROWS = 17;
   const FLOOR_ROW = 13;
+  const DESCENT_EXIT_COLUMNS = 7;
   const PLAYER_WIDTH = 24;
   const PLAYER_HEIGHT = 42;
 
@@ -63,6 +64,7 @@
         mineDirection: "right",
         attackUntil: 0,
       };
+      this.lastSafePosition = { x: this.player.x, y: this.player.y };
 
       this.bindControls();
       this.generateWorld();
@@ -286,6 +288,9 @@
       this.movePlayer("y", this.player.vy * delta);
 
       this.player.x = clamp(this.player.x, 18, WORLD_COLUMNS * TILE - this.player.w - 18);
+      if (this.player.grounded && this.player.y < WORLD_ROWS * TILE - PLAYER_HEIGHT) {
+        this.lastSafePosition = { x: this.player.x, y: this.player.y };
+      }
       if (this.player.y > WORLD_ROWS * TILE) this.handleBottomFall();
 
       this.updateEnemies(delta, timestamp);
@@ -485,12 +490,30 @@
     }
 
     handlePlayerDeath() {
-      const lostCoins = this.options.onPlayerDeath ? this.options.onPlayerDeath() : 0;
-      this.setHint(`小猫回到了矿洞入口${lostCoins ? `，遗失 ${lostCoins} 金币` : ""}。`);
+      const result = this.options.onPlayerDeath
+        ? this.options.onPlayerDeath({ hp: this.player.hp, maxHp: this.player.maxHp })
+        : { reset: true, message: "体力归零，游戏已重置。" };
+
+      if (result?.revived) {
+        this.player.hp = Math.max(1, Math.min(this.player.maxHp, result.hp || this.player.maxHp));
+        this.returnToLastSafePosition(result.message || "体力已恢复，小猫退回最近安全点。");
+        return;
+      }
+
+      if (result?.reset) {
+        this.setHint(result.message || "体力归零，游戏已重置。");
+        return;
+      }
+
       this.resetPosition(true);
     }
 
     handleBottomFall() {
+      if (!this.isAtDescentExit()) {
+        this.returnToLastSafePosition("小猫踩空了，已回到最近的安全落脚点。继续向右走到矿洞尽头才会下潜。");
+        return;
+      }
+
       const result = this.options.onDescend ? this.options.onDescend() : {};
       if (result.advanced) {
         this.generateWorld();
@@ -499,8 +522,27 @@
         return;
       }
 
-      this.resetPosition();
-      this.setHint(result.message || "矿井底部暂时无法继续下潜，小猫回到了入口。");
+      this.returnToLastSafePosition(result.message || "矿井底部暂时无法继续下潜，小猫退回了安全落脚点。");
+    }
+
+    isAtDescentExit() {
+      return this.player.x > (WORLD_COLUMNS - DESCENT_EXIT_COLUMNS) * TILE;
+    }
+
+    returnToLastSafePosition(message) {
+      const safe = this.lastSafePosition || { x: 96, y: FLOOR_ROW * TILE - PLAYER_HEIGHT };
+      this.restoreEntrancePlatform();
+      const safeColumn = Math.max(1, Math.min(WORLD_COLUMNS - 2, Math.floor((safe.x + PLAYER_WIDTH / 2) / TILE)));
+      this.addBlock(safeColumn, FLOOR_ROW, "stone");
+      this.player.x = clamp(safe.x, 18, WORLD_COLUMNS * TILE - this.player.w - 18);
+      this.player.y = clamp(safe.y, 72, FLOOR_ROW * TILE - PLAYER_HEIGHT);
+      this.player.vx = 0;
+      this.player.vy = 0;
+      this.player.invulnerableUntil = performance.now() + 650;
+      this.cameraX = clamp(this.player.x - this.viewWidth * 0.42, 0, WORLD_COLUMNS * TILE - this.viewWidth);
+      this.cameraY = 0;
+      this.setHint(message);
+      this.notifyStatus();
     }
 
     restoreEntrancePlatform() {
@@ -525,6 +567,7 @@
       this.player.invulnerableUntil = performance.now() + 1000;
       this.cameraX = 0;
       this.cameraY = 0;
+      this.lastSafePosition = { x: this.player.x, y: this.player.y };
       this.notifyStatus();
     }
 
@@ -557,6 +600,7 @@
       const activeBoss = this.enemies.find((enemy) => enemy.isBoss && !enemy.dead);
       let hint = "方向键或 A、D 移动，W、↑ 或空格跳跃，按 E 挖矿。";
       if (nearestBlock) hint = `附近：${config.materialNames?.[nearestBlock.type] || nearestBlock.type}，按 E 挖掘；按住方向再按 E 可定向挖。`;
+      if (this.isAtDescentExit()) hint = "矿洞尽头有下潜口。准备好后从这里向下挖，进入下一层。";
       if ((config.durability ?? 1) <= 0) hint = `镐子耐久耗尽，点击矿洞下方“金币修理”，支付 ${config.repairCost || 0} 金币补满耐久。`;
       if (nearestEnemy) hint = `${nearestEnemy.name}靠近了！按 F 使用${config.swordName || "剑"}。`;
       this.canvas.dataset.playerX = String(Math.round(this.player.x));

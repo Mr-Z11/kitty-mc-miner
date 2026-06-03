@@ -159,6 +159,8 @@ const FINAL_BOSS_REQUIREMENTS = {
   lanternLevel: 5,
 };
 
+const BUYABLE_SPECIAL_MATERIALS = new Set(["redstone", "lapis", "gold", "emerald", "amethyst", "diamond"]);
+
 const ABYSS_CONTRACT_MATERIALS = ["iron", "gold", "diamond"];
 
 const ABYSS_BOSSES = [
@@ -687,6 +689,10 @@ function caveSoupCost() {
   return 14 + accessibleDepth() * 2;
 }
 
+function reviveHealthCost() {
+  return Math.round(140 + accessibleDepth() * 12 + playerLevel() * 30 + state.toolIndex * 90);
+}
+
 function normalizePickaxeDurability() {
   if (!Number.isFinite(state.pickaxeDurability)) {
     state.pickaxeDurability = maxPickaxeDurability();
@@ -1087,18 +1093,21 @@ function renderCaveShop() {
   const materialTrades = Object.entries(MATERIALS)
     .filter(([type]) => state.discoveries.materials[type])
     .map(([type, material]) => {
+      const buyable = BUYABLE_SPECIAL_MATERIALS.has(type);
       const buyPrice = material.value * 3;
       return `
         <article class="cave-supply-item material-trade-item">
           <i class="mini-block" style="${miniBlockStyle(type)}" aria-hidden="true"></i>
           <div class="cave-supply-copy">
             <strong>${material.name}</strong>
-            <small>来源：${material.origin} · 买入 ${buyPrice}¢ / 卖出 ${material.value}¢</small>
+            <small>来源：${material.origin} · ${buyable ? `特殊材料可买入 ${buyPrice}¢` : "普通材料只能挖矿获得"} · 卖出 ${material.value}¢</small>
           </div>
           <div class="trade-actions">
-            <button class="buy-button" type="button" data-buy-cave-material="${type}" ${backpackFull || state.coins < buyPrice ? "disabled" : ""}>
-              ${backpackFull ? "背包已满" : state.coins < buyPrice ? missingCoinsLabel(buyPrice) : `买入 ${buyPrice}¢`}
-            </button>
+            ${buyable ? `
+              <button class="buy-button" type="button" data-buy-cave-material="${type}" ${backpackFull || state.coins < buyPrice ? "disabled" : ""}>
+                ${backpackFull ? "背包已满" : state.coins < buyPrice ? missingCoinsLabel(buyPrice) : `买入 ${buyPrice}¢`}
+              </button>
+            ` : `<span class="trade-note">挖矿获取</span>`}
             <button class="buy-button sell-trade-button" type="button" data-sell-cave-material="${type}" ${state.inventory[type] <= 0 ? "disabled" : ""}>
               卖出 ${material.value}¢
             </button>
@@ -1141,7 +1150,7 @@ function renderCaveShop() {
     </article>
     <div class="trade-divider">
       <strong>材料交易</strong>
-      <small>发现过的材料会加入交易目录。深层材料仍建议亲自下矿采集。</small>
+      <small>普通材料只能挖矿获得；特殊材料发现后可在补给站少量买入，方便后期补缺口。</small>
     </div>
     ${materialTrades}
   `;
@@ -2027,6 +2036,11 @@ function buyCaveSupply(supplyId) {
 function buyCaveMaterial(type) {
   const material = MATERIALS[type];
   if (!material || !state.discoveries.materials[type]) return;
+  if (!BUYABLE_SPECIAL_MATERIALS.has(type)) {
+    showToast(`${material.name}是普通材料，只能通过挖矿获得。`);
+    playTone("error");
+    return;
+  }
   const price = material.value * 3;
   if (inventoryTotal() >= BACKPACKS[state.backpackIndex].capacity) {
     showToast("背包已满，先出售材料或升级背包。");
@@ -2244,15 +2258,38 @@ function upgradeBeaconResonance() {
   saveGame();
 }
 
-function handleCaveDeath() {
-  const lostCoins = Math.min(18, state.coins);
-  state.coins -= lostCoins;
-  showToast(`小猫回到入口，遗失 ${lostCoins} 金币。`);
-  logEvent("矿洞深处并不安全，锻造护甲后再继续推进。");
-  playTone("error");
-  renderAll();
-  saveGame();
-  return lostCoins;
+function handleCaveDeath({ maxHp = 5 } = {}) {
+  const cost = reviveHealthCost();
+  const canRevive = state.coins >= cost;
+  const wantsRevive = canRevive && window.confirm(
+    `体力归零！支付 ${cost} 金币购买满体力并退回安全点？\n选择“取消”将重置游戏。`
+  );
+
+  if (wantsRevive) {
+    state.coins -= cost;
+    showToast(`已支付 ${cost} 金币恢复体力。`);
+    logEvent(`紧急补给启动：小猫购买体力并退回最近安全落脚点。`);
+    playTone("upgrade");
+    renderAll();
+    saveGame();
+    return {
+      revived: true,
+      hp: maxHp,
+      message: `紧急补给完成：支付 ${cost} 金币恢复体力，已退回安全点。`,
+    };
+  }
+
+  if (!canRevive) {
+    window.alert(`体力归零，复活需要 ${cost} 金币；当前只有 ${state.coins} 金币，还差 ${cost - state.coins} 金币。游戏将重置。`);
+  } else {
+    window.alert("你选择不购买体力，游戏将重置。");
+  }
+
+  resetGame({ skipConfirm: true, reason: "体力归零，游戏已重置。" });
+  return {
+    reset: true,
+    message: "体力归零，游戏已重置。",
+  };
 }
 
 function updateCaveStatus(status) {
@@ -2731,8 +2768,9 @@ function updateMusicVolume(event) {
   saveGame();
 }
 
-function resetGame() {
-  if (!window.confirm("确定要清空金币、背包和升级进度，重新开始吗？")) return;
+function resetGame(options = {}) {
+  const skipConfirm = options.skipConfirm === true;
+  if (!skipConfirm && !window.confirm("确定要清空金币、背包和升级进度，重新开始吗？")) return;
 
   state = initialState();
   normalizeDurabilityLevel();
@@ -2744,14 +2782,14 @@ function resetGame() {
   state.tutorialSeen = true;
   if (caveGame) {
     caveGame.generateWorld();
-    caveGame.resetPosition();
+    caveGame.resetPosition(true);
   }
   syncAudioPlayback();
   renderAudioSettings();
   renderAll();
   saveGame();
-  showToast("矿洞已重置，新的旅程开始了。");
-  logEvent("猫猫矿工重新整理了装备，回到矿洞入口。");
+  showToast(options.reason || "矿洞已重置，新的旅程开始了。");
+  logEvent(options.reason || "猫猫矿工重新整理了装备，回到矿洞入口。");
 }
 
 dom.sellAll.addEventListener("click", sellInventory);

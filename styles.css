@@ -2927,6 +2927,9 @@ kbd {
 
 .cave-shop-card {
   width: min(640px, 100%);
+  max-height: min(860px, calc(100vh - 40px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   border: 4px solid #0b1511;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%) 0 0 / 12px 12px,
@@ -2935,7 +2938,24 @@ kbd {
 }
 
 .cave-shop-content {
+  min-height: 0;
+  overflow-y: auto;
   padding: 15px;
+  scrollbar-color: #7f9b5d #172821;
+  scrollbar-width: thin;
+}
+
+.cave-shop-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.cave-shop-content::-webkit-scrollbar-track {
+  background: #172821;
+}
+
+.cave-shop-content::-webkit-scrollbar-thumb {
+  border: 1px solid #172821;
+  background: #7f9b5d;
 }
 
 .cave-shop-content > p {
@@ -3016,6 +3036,18 @@ kbd {
 .sell-trade-button {
   color: #d7f2bf;
   background: #36563d;
+}
+
+.trade-note {
+  display: grid;
+  min-width: 92px;
+  min-height: 32px;
+  place-items: center;
+  color: #96a89d;
+  font-size: 8px;
+  font-weight: 900;
+  border: 1px solid #293b34;
+  background: rgba(64, 83, 75, 0.58);
 }
 
 .requirement-guidance {
