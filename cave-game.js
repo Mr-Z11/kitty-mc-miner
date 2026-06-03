@@ -449,8 +449,9 @@
         return;
       }
 
-      if (this.options.canCollect && !this.options.canCollect()) {
-        this.setHint("背包已满，按 S 出售或升级背包。");
+      const collectCheck = this.options.canCollect ? this.options.canCollect() : true;
+      if (collectCheck !== true) {
+        this.setHint(collectCheck?.message || "背包已满，按 S 出售或升级背包。");
         return;
       }
 
@@ -517,16 +518,16 @@
     handlePlayerDeath() {
       const result = this.options.onPlayerDeath
         ? this.options.onPlayerDeath({ hp: this.player.hp, maxHp: this.player.maxHp })
-        : { reset: true, message: "体力归零，游戏已重置。" };
+        : { reset: true, message: "血量归零，装备已重置。" };
 
       if (result?.revived) {
         this.player.hp = Math.max(1, Math.min(this.player.maxHp, result.hp || this.player.maxHp));
-        this.returnToLastSafePosition(result.message || "体力已恢复，小猫退回最近安全点。");
+        this.returnToLastSafePosition(result.message || "血量已恢复，小猫退回最近安全点。");
         return;
       }
 
       if (result?.reset) {
-        this.setHint(result.message || "体力归零，游戏已重置。");
+        this.setHint(result.message || "血量归零，装备已重置。");
         return;
       }
 

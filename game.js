@@ -160,6 +160,11 @@ const FINAL_BOSS_REQUIREMENTS = {
 };
 
 const BUYABLE_SPECIAL_MATERIALS = new Set(["redstone", "lapis", "gold", "emerald", "amethyst", "diamond"]);
+const BASE_STAMINA = 5;
+const STAMINA_RESTORE_AMOUNT = 2;
+const HEALTH_KIT_RESTORE = 2;
+const HEALTH_REVIVE_AMOUNT = 3;
+const HEALTH_KIT_RECIPE = { wood: 4, coal: 3 };
 
 const ABYSS_CONTRACT_MATERIALS = ["iron", "gold", "diamond"];
 
@@ -291,8 +296,9 @@ const defaultVillage = () => Object.fromEntries(
 );
 
 const initialState = () => ({
-  saveVersion: 8,
+  saveVersion: 9,
   coins: 0,
+  stamina: null,
   depth: 1,
   maxDepthReached: 1,
   mined: 0,
@@ -342,6 +348,7 @@ normalizeDurabilityLevel();
 normalizeCollections();
 normalizeLanternLevel();
 normalizePickaxeDurability();
+normalizeStamina();
 normalizeExpeditionState();
 normalizeAudioState();
 let audioContext;
@@ -358,6 +365,7 @@ let discoveryQueue = [];
 const dom = {
   coinCount: document.querySelector("#coinCount"),
   topHealth: document.querySelector("#topHealth"),
+  topStamina: document.querySelector("#topStamina"),
   depthCount: document.querySelector("#depthCount"),
   minedCount: document.querySelector("#minedCount"),
   topMiningPower: document.querySelector("#topMiningPower"),
@@ -390,6 +398,8 @@ const dom = {
   caveCanvas: document.querySelector("#caveCanvas"),
   swordHud: document.querySelector("#swordHud"),
   caveArmor: document.querySelector("#caveArmor"),
+  caveHealth: document.querySelector("#caveHealth"),
+  caveStamina: document.querySelector("#caveStamina"),
   caveDurability: document.querySelector("#caveDurability"),
   caveMiningPower: document.querySelector("#caveMiningPower"),
   repairPickaxe: document.querySelector("#repairPickaxe"),
@@ -689,8 +699,22 @@ function caveSoupCost() {
   return 14 + accessibleDepth() * 2;
 }
 
-function reviveHealthCost() {
-  return Math.round(140 + accessibleDepth() * 12 + playerLevel() * 30 + state.toolIndex * 90);
+function maxStamina() {
+  return BASE_STAMINA
+    + Math.floor((playerLevel() - 1) / 4)
+    + (isVillageBuilt("heartBeacon") ? 1 : 0);
+}
+
+function staminaTopUpCost() {
+  return Math.round(42 + accessibleDepth() * 6 + playerLevel() * 10);
+}
+
+function normalizeStamina() {
+  if (!Number.isFinite(state.stamina)) {
+    state.stamina = maxStamina();
+    return;
+  }
+  state.stamina = Math.max(0, Math.min(maxStamina(), state.stamina));
 }
 
 function normalizePickaxeDurability() {
@@ -974,6 +998,7 @@ function renderStats() {
   dom.freeExpeditionCount.textContent = state.freeExpeditionStarts;
   dom.ticketCount.textContent = state.expeditionTickets;
   renderTopHealth();
+  renderTopStamina();
 }
 
 function renderInventory() {
@@ -1044,6 +1069,8 @@ function renderCaveHud(status) {
   dom.swordHud.textContent = `${sword.name} · ${sword.quality}`;
   dom.swordHud.className = `quality-${sword.qualityClass}`;
   dom.caveArmor.textContent = armorScore();
+  dom.caveHealth.textContent = `${caveStatus?.hp ?? 5} / ${caveStatus?.maxHp ?? 5}`;
+  dom.caveStamina.textContent = `${state.stamina} / ${maxStamina()}`;
   dom.caveDurability.textContent = `${state.pickaxeDurability} / ${maxPickaxeDurability()}`;
   dom.caveMiningPower.textContent = TOOLS[state.toolIndex].damage;
   dom.caveDurability.classList.toggle("is-empty", state.pickaxeDurability <= 0);
@@ -1060,6 +1087,10 @@ function renderTopHealth(status = caveGame?.getStatus()) {
     { length: status?.maxHp || 5 },
     (_, index) => (index < (status?.hp ?? 5) ? "♥" : "♡")
   ).join(" ");
+}
+
+function renderTopStamina() {
+  dom.topStamina.textContent = `${state.stamina} / ${maxStamina()}`;
 }
 
 function renderRepairStation() {
@@ -1087,7 +1118,9 @@ function renderCaveShop() {
   const repairCost = repairPickaxeCost();
   const sellValue = inventoryValue();
   const caveStatus = caveGame?.getStatus();
+  const staminaFull = state.stamina >= maxStamina();
   const healthFull = !caveStatus || caveStatus.hp >= caveStatus.maxHp;
+  const healthKitMissing = missingRequirementLabel(HEALTH_KIT_RECIPE);
   const durabilityFull = state.pickaxeDurability >= maxPickaxeDurability();
   const backpackFull = inventoryTotal() >= BACKPACKS[state.backpackIndex].capacity;
   const materialTrades = Object.entries(MATERIALS)
@@ -1119,13 +1152,23 @@ function renderCaveShop() {
 
   dom.caveSupplyList.innerHTML = `
     <article class="cave-supply-item">
-      <span class="cave-supply-icon" aria-hidden="true">♥</span>
+      <span class="cave-supply-icon" aria-hidden="true">⚡</span>
       <div class="cave-supply-copy">
         <strong>矿工热汤</strong>
-        <small>恢复 2 点体力，不离开当前矿层。</small>
+        <small>恢复 ${STAMINA_RESTORE_AMOUNT} 点体力。体力只影响挖矿，不会导致重置。</small>
       </div>
-      <button class="buy-button" type="button" data-buy-cave-supply="soup" ${healthFull || state.coins < soupCost ? "disabled" : ""}>
-        ${healthFull ? "体力已满" : state.coins < soupCost ? missingCoinsLabel(soupCost) : `${soupCost} ¢`}
+      <button class="buy-button" type="button" data-buy-cave-supply="soup" ${staminaFull || state.coins < soupCost ? "disabled" : ""}>
+        ${staminaFull ? "体力已满" : state.coins < soupCost ? missingCoinsLabel(soupCost) : `${soupCost} ¢`}
+      </button>
+    </article>
+    <article class="cave-supply-item">
+      <span class="cave-supply-icon" aria-hidden="true">♥</span>
+      <div class="cave-supply-copy">
+        <strong>战斗绷带</strong>
+        <small>消耗 ${formatRequirement(HEALTH_KIT_RECIPE)}，恢复 ${HEALTH_KIT_RESTORE} 点血量。血量只会被怪物和 Boss 扣除。</small>
+      </div>
+      <button class="buy-button" type="button" data-buy-cave-supply="bandage" ${healthFull || Boolean(healthKitMissing) ? "disabled" : ""}>
+        ${healthFull ? "血量已满" : healthKitMissing || "制作回血"}
       </button>
     </article>
     <article class="cave-supply-item">
@@ -1888,8 +1931,50 @@ function craftArmor(slotId) {
   saveGame();
 }
 
+function buyFullStamina({ prompt = true } = {}) {
+  const cost = staminaTopUpCost();
+  if (state.stamina >= maxStamina()) {
+    showToast("体力已经是满的。");
+    return false;
+  }
+  if (state.coins < cost) {
+    showToast(`体力不足，购买满体力需要 ${cost} 金币，还差 ${cost - state.coins} 金币。`);
+    playTone("error");
+    return false;
+  }
+  if (prompt && !window.confirm(`体力不足！支付 ${cost} 金币购买满体力？`)) {
+    showToast("体力不足，补给站热汤可以恢复体力。");
+    return false;
+  }
+  state.coins -= cost;
+  state.stamina = maxStamina();
+  showToast(`已支付 ${cost} 金币，体力恢复至 ${state.stamina} / ${maxStamina()}。`);
+  logEvent("小猫在补给站购买体力，重新握紧镐子继续挖矿。");
+  playTone("upgrade");
+  renderAll();
+  saveGame();
+  return true;
+}
+
+function spendStamina(amount = 1) {
+  if (state.stamina <= 0) return false;
+  state.stamina = Math.max(0, state.stamina - Math.max(0, amount));
+  if (state.stamina <= 0) {
+    showToast("体力耗尽，不会重置游戏；可以用金币购买体力后继续挖矿。");
+    logEvent("体力已经耗尽。小猫需要热汤或金币补给，但不会因此失去进度。");
+  }
+  return true;
+}
+
 function canCollectCaveMaterial() {
-  return inventoryTotal() < BACKPACKS[state.backpackIndex].capacity;
+  if (inventoryTotal() >= BACKPACKS[state.backpackIndex].capacity) {
+    return { message: "背包已满，按 S 出售或升级背包。" };
+  }
+  if (state.stamina <= 0) {
+    const bought = buyFullStamina();
+    return bought || { message: "体力不足，购买热汤或支付金币补满体力后才能继续挖矿。" };
+  }
+  return true;
 }
 
 function collectCaveMaterial({ type }) {
@@ -1901,8 +1986,8 @@ function collectCaveMaterial({ type }) {
   state.pickaxeDurability = Math.max(0, state.pickaxeDurability - 1);
   state.mined += 1;
   if (state.mined % CAVE_FATIGUE_INTERVAL === 0) {
-    caveGame?.spendPlayerHealth(1);
-    logEvent(`连续挖掘消耗了 1 点体力。补给站热汤可以恢复体力。`);
+    spendStamina(1);
+    logEvent(`连续挖掘消耗了 1 点体力，当前体力 ${state.stamina} / ${maxStamina()}。`);
   }
   addXp(2);
   addMiningExpeditionRewards();
@@ -2011,14 +2096,38 @@ function buyCaveSupply(supplyId) {
       showToast(`购买矿工热汤还缺 ${cost - state.coins} 金币。`);
       return;
     }
-    const restored = caveGame?.healPlayer(2) || 0;
-    if (!restored) {
+    const previousStamina = state.stamina;
+    state.stamina = Math.min(maxStamina(), state.stamina + STAMINA_RESTORE_AMOUNT);
+    const restored = state.stamina - previousStamina;
+    if (restored <= 0) {
       showToast("体力已经是满的。");
       return;
     }
     state.coins -= cost;
     showToast(`矿工热汤恢复 ${restored} 点体力。`);
-    logEvent("补给站的热汤让小猫暖和起来，可以继续探索。");
+    logEvent("补给站的热汤让小猫恢复体力，可以继续挖矿。");
+    playTone("upgrade");
+    renderAll();
+    saveGame();
+    return;
+  }
+
+  if (supplyId === "bandage") {
+    const caveStatus = caveGame?.getStatus();
+    if (!caveStatus || caveStatus.hp >= caveStatus.maxHp) {
+      showToast("血量已经是满的。");
+      return;
+    }
+    const missing = missingRequirementLabel(HEALTH_KIT_RECIPE);
+    if (missing) {
+      showToast(`回血材料不足：${missing}。`);
+      playTone("error");
+      return;
+    }
+    consumeRequirement(HEALTH_KIT_RECIPE);
+    const restored = caveGame?.healPlayer(HEALTH_KIT_RESTORE) || 0;
+    showToast(`战斗绷带恢复 ${restored} 点血量。`);
+    logEvent(`小猫用${formatRequirement(HEALTH_KIT_RECIPE)}制作战斗绷带，恢复了血量。`);
     playTone("upgrade");
     renderAll();
     saveGame();
@@ -2095,6 +2204,7 @@ function repairVillageBuilding(buildingId) {
   });
   state.village[buildingId] = true;
   normalizePickaxeDurability();
+  normalizeStamina();
   showToast(`${chapter.building.name}修复完成！${chapter.building.effect}。`);
   logEvent(`${chapter.building.name}重新亮起。现在可以召唤${chapter.boss.name}，夺回通往${chapter.unlock}的道路。`);
   playTone("upgrade");
@@ -2258,37 +2368,64 @@ function upgradeBeaconResonance() {
   saveGame();
 }
 
+function resetEquipmentAfterHealthDeath(reason = "血量归零，装备已重置，矿工等级保留。") {
+  state.depth = 1;
+  state.toolIndex = 0;
+  state.durabilityLevel = 0;
+  state.pickaxeDurability = null;
+  state.shiftsStarted = 0;
+  state.backpackIndex = 0;
+  state.swordIndex = 0;
+  state.equipment = defaultEquipment();
+  state.lanternLevel = 0;
+  state.perks = defaultPerks();
+  state.stamina = maxStamina();
+  normalizeDurabilityLevel();
+  normalizeLanternLevel();
+  normalizePickaxeDurability();
+  normalizeStamina();
+  if (caveGame) {
+    caveGame.generateWorld();
+    caveGame.resetPosition(true);
+  }
+  showToast(reason);
+  logEvent("战斗失败后，小猫保留矿工等级、金币、材料与村庄进度，但失去了工具、背包、剑、护甲、矿灯和附魔。");
+  playTone("error");
+  renderAll();
+  saveGame();
+}
+
 function handleCaveDeath({ maxHp = 5 } = {}) {
-  const cost = reviveHealthCost();
-  const canRevive = state.coins >= cost;
-  const wantsRevive = canRevive && window.confirm(
-    `体力归零！支付 ${cost} 金币购买满体力并退回安全点？\n选择“取消”将重置游戏。`
+  const missing = missingRequirementLabel(HEALTH_KIT_RECIPE);
+  const canHeal = !missing;
+  const wantsHeal = canHeal && window.confirm(
+    `血量归零！消耗 ${formatRequirement(HEALTH_KIT_RECIPE)} 立即回血并退回安全点？\n选择“取消”将重置装备，但矿工等级不变。`
   );
 
-  if (wantsRevive) {
-    state.coins -= cost;
-    showToast(`已支付 ${cost} 金币恢复体力。`);
-    logEvent(`紧急补给启动：小猫购买体力并退回最近安全落脚点。`);
+  if (wantsHeal) {
+    consumeRequirement(HEALTH_KIT_RECIPE);
+    showToast(`战斗绷带生效，血量恢复 ${Math.min(maxHp, HEALTH_REVIVE_AMOUNT)} 点。`);
+    logEvent("小猫用随身材料制作战斗绷带，从怪物攻击中缓过来了。");
     playTone("upgrade");
     renderAll();
     saveGame();
     return {
       revived: true,
-      hp: maxHp,
-      message: `紧急补给完成：支付 ${cost} 金币恢复体力，已退回安全点。`,
+      hp: Math.min(maxHp, HEALTH_REVIVE_AMOUNT),
+      message: "战斗绷带生效：血量已恢复，已退回最近安全点。",
     };
   }
 
-  if (!canRevive) {
-    window.alert(`体力归零，复活需要 ${cost} 金币；当前只有 ${state.coins} 金币，还差 ${cost - state.coins} 金币。游戏将重置。`);
+  if (!canHeal) {
+    window.alert(`血量归零，回血需要 ${formatRequirement(HEALTH_KIT_RECIPE)}；当前还缺 ${missing}。将重置装备，但矿工等级不变。`);
   } else {
-    window.alert("你选择不购买体力，游戏将重置。");
+    window.alert("你选择不使用材料回血，将重置装备；矿工等级不变。");
   }
 
-  resetGame({ skipConfirm: true, reason: "体力归零，游戏已重置。" });
+  resetEquipmentAfterHealthDeath();
   return {
     reset: true,
-    message: "体力归零，游戏已重置。",
+    message: "血量归零，装备已重置，矿工等级保留。",
   };
 }
 
@@ -2777,6 +2914,7 @@ function resetGame(options = {}) {
   normalizeCollections();
   normalizeLanternLevel();
   normalizePickaxeDurability();
+  normalizeStamina();
   normalizeExpeditionState();
   discoveryQueue = [];
   state.tutorialSeen = true;
