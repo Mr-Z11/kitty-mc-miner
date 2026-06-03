@@ -182,18 +182,21 @@
       symbol: "♟",
       reward: 36,
       description: "岩层中留下的小小爪印，证明这里曾有远古猫矿工经过。",
+      effect: "陈列后镐子耐久上限 +3。",
     },
     minerBadge: {
       name: "旧矿工徽章",
       symbol: "✦",
       reward: 52,
       description: "磨损严重的铜制徽章，背面还能看见猫猫村庄的旧标记。",
+      effect: "陈列后短局探险体力 +1，探险结算经验 +10%。",
     },
     mysteryCan: {
       name: "神秘猫罐头",
       symbol: "▣",
       reward: 68,
       description: "不知道是谁埋下的罐头。它没有过期，但谁也不敢打开。",
+      effect: "陈列后血量上限 +1。",
     },
   };
 

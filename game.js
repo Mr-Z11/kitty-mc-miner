@@ -150,15 +150,7 @@ const FINAL_BOSS = {
   finalBoss: true,
 };
 
-const FINAL_BOSS_REQUIREMENTS = {
-  depth: 90,
-  toolDamage: 26,
-  swordDamage: 17,
-  armor: 18,
-  durability: 52,
-  level: 14,
-  lanternLevel: 5,
-};
+const FINAL_BOSS_POWER_REQUIREMENT = 2400;
 
 const BUYABLE_SPECIAL_MATERIALS = new Set(["redstone", "lapis", "gold", "emerald", "amethyst", "diamond"]);
 const MATERIAL_MARKET_ORDER = ["redstone", "lapis", "gold", "emerald", "amethyst", "diamond"];
@@ -834,81 +826,44 @@ function playerLevel() {
   return level;
 }
 
-function finalBossRequirements() {
-  return [
-    {
-      id: "depth",
-      label: "最深深度",
-      current: deepestDepthReached(),
-      required: FINAL_BOSS_REQUIREMENTS.depth,
-      unit: "m",
-      hint: "继续下潜到 90m，抵达真正的终焉祭坛",
-    },
-    {
-      id: "tool",
-      label: "镐力",
-      current: TOOLS[state.toolIndex].damage,
-      required: FINAL_BOSS_REQUIREMENTS.toolDamage,
-      unit: "",
-      hint: "升级至紫水晶共鸣镐，打开最终矿层",
-    },
-    {
-      id: "sword",
-      label: "武器攻击",
-      current: currentSword().damage,
-      required: FINAL_BOSS_REQUIREMENTS.swordDamage,
-      unit: "",
-      hint: "剑转换台升级至钻石剑",
-    },
-    {
-      id: "armor",
-      label: "总护甲",
-      current: armorScore(),
-      required: FINAL_BOSS_REQUIREMENTS.armor,
-      unit: "",
-      hint: "尽量锻造全套钻石护甲，减少最终战失误惩罚",
-    },
-    {
-      id: "durability",
-      label: "镐耐久上限",
-      current: maxPickaxeDurability(),
-      required: FINAL_BOSS_REQUIREMENTS.durability,
-      unit: "",
-      hint: "完成耐久维护满级，终局前把镐子打磨到极限",
-    },
-    {
-      id: "level",
-      label: "矿工等级",
-      current: playerLevel(),
-      required: FINAL_BOSS_REQUIREMENTS.level,
-      unit: "",
-      hint: "把矿工等级提升到 Lv.14，给最终战留足成长时间",
-    },
-    {
-      id: "lantern",
-      label: "矿灯等级",
-      current: state.lanternLevel,
-      required: FINAL_BOSS_REQUIREMENTS.lanternLevel,
-      unit: "",
-      hint: "改装至绿宝石罗盘灯，照亮 90m 终焉入口",
-    },
-  ].map((requirement) => ({
-    ...requirement,
-    met: requirement.current >= requirement.required,
-    missing: Math.max(0, requirement.required - requirement.current),
+function finalBossPowerParts() {
+  const parts = [
+    { id: "depth", label: "最深深度", current: deepestDepthReached(), unit: "m", weight: 8 },
+    { id: "tool", label: "镐力", current: TOOLS[state.toolIndex].damage, unit: "", weight: 22 },
+    { id: "sword", label: "武器攻击", current: currentSword().damage, unit: "", weight: 28 },
+    { id: "armor", label: "总护甲", current: armorScore(), unit: "", weight: 24 },
+    { id: "durability", label: "镐耐久上限", current: maxPickaxeDurability(), unit: "", weight: 5 },
+    { id: "level", label: "矿工等级", current: playerLevel(), unit: "", weight: 26 },
+    { id: "lantern", label: "矿灯等级", current: state.lanternLevel, unit: "", weight: 90 },
+  ];
+  return parts.map((part) => ({
+    ...part,
+    power: Math.round(part.current * part.weight),
   }));
 }
 
+function finalBossPower() {
+  return finalBossPowerParts().reduce((sum, part) => sum + part.power, 0);
+}
+
+function finalBossPowerStatus() {
+  const current = finalBossPower();
+  return {
+    current,
+    required: FINAL_BOSS_POWER_REQUIREMENT,
+    ready: current >= FINAL_BOSS_POWER_REQUIREMENT,
+    missing: Math.max(0, FINAL_BOSS_POWER_REQUIREMENT - current),
+  };
+}
+
 function finalBossReady() {
-  return storyCompleted() && finalBossRequirements().every((requirement) => requirement.met);
+  return storyCompleted() && finalBossPowerStatus().ready;
 }
 
 function finalBossGateText() {
-  const missing = finalBossRequirements().filter((requirement) => !requirement.met);
-  if (!missing.length) return "终局门槛已达成";
-  return missing
-    .map((requirement) => `${requirement.label}还差 ${requirement.missing}${requirement.unit}`)
-    .join("；");
+  const power = finalBossPowerStatus();
+  if (power.ready) return `终局战力已达成 ${power.current} / ${power.required}`;
+  return `战力还差 ${power.missing}（当前 ${power.current} / ${power.required}）`;
 }
 
 function addXp(amount) {
@@ -1398,29 +1353,37 @@ function renderVillage() {
   }).join("");
 
   if (completed && !victory) {
-    const requirements = finalBossRequirements();
-    const ready = requirements.every((requirement) => requirement.met);
-    const metCount = requirements.filter((requirement) => requirement.met).length;
+    const power = finalBossPowerStatus();
+    const powerParts = finalBossPowerParts();
+    const ready = power.ready;
     const bossActive = caveGame?.hasActiveBoss();
     dom.villageAction.innerHTML = `
       <article class="final-boss-card">
         <small>FINAL BOSS · TRUE ENDING</small>
         <strong>${FINAL_BOSS.name}</strong>
-        <p>所有村庄工程、矿层推进、镐子、剑与护甲升级，最终都是为了击败它。生命 ${FINAL_BOSS.hp} · 攻击 ${FINAL_BOSS.damage} · 门槛很高，但战斗仍允许撤退、补给和反复挑战。</p>
+        <p>最终挑战只看总战力。挖矿深度和镐力会提供高额战力，继续下潜、换更强的镐子、提升耐久、武器、护甲、矿灯和等级，都能把你推向终局。生命 ${FINAL_BOSS.hp} · 攻击 ${FINAL_BOSS.damage}</p>
         <div class="final-gate-list">
-          ${requirements.map((requirement) => `
-            <div class="final-gate-item ${requirement.met ? "done" : "missing"}">
-              <span>${requirement.met ? "✓" : "!"}</span>
+          <div class="final-gate-item ${ready ? "done" : "missing"}">
+            <span>${ready ? "✓" : "!"}</span>
+            <div>
+              <strong>终局战力</strong>
+              <small>当前 ${power.current} / 门槛 ${power.required}</small>
+              <em>${ready ? "已达标，可以挑战最终 Boss" : `继续挖矿和升级，还差 ${power.missing} 战力`}</em>
+            </div>
+          </div>
+          ${powerParts.map((part) => `
+            <div class="final-gate-item power-source">
+              <span>+${part.power}</span>
               <div>
-                <strong>${requirement.label}</strong>
-                <small>当前 ${requirement.current}${requirement.unit} / 门槛 ${requirement.required}${requirement.unit}</small>
-                <em>${requirement.met ? "已达标" : requirement.hint}</em>
+                <strong>${part.label}</strong>
+                <small>当前 ${part.current}${part.unit} · 权重 x${part.weight}</small>
+                <em>${part.id === "depth" || part.id === "tool" ? "挖矿成长核心战力来源" : "会计入最终 Boss 总战力"}</em>
               </div>
             </div>
           `).join("")}
         </div>
         <button class="buy-button final-boss-button" type="button" data-summon-final-boss="${FINAL_BOSS.id}" ${!ready || bossActive ? "disabled" : ""}>
-          ${bossActive ? "终极 Boss 已进入矿洞" : ready ? `挑战${FINAL_BOSS.name}` : `门槛不足 ${metCount} / ${requirements.length}`}
+          ${bossActive ? "终极 Boss 已进入矿洞" : ready ? `挑战${FINAL_BOSS.name}` : `战力不足 ${power.current} / ${power.required}`}
         </button>
       </article>
     `;
@@ -2399,7 +2362,7 @@ function summonFinalBoss(bossId) {
   }
   if (!finalBossReady()) {
     showToast(`终极 Boss 门槛不足：${finalBossGateText()}。`);
-    logEvent("终局祭坛拒绝开启：继续提升深度、武器、护甲、矿灯和等级。");
+    logEvent("终局祭坛拒绝开启：继续挖矿下潜、升级镐力，并强化武器、护甲、矿灯和等级来堆高总战力。");
     playTone("error");
     return;
   }
