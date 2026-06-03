@@ -2003,15 +2003,17 @@ function collectCaveMaterial({ type }) {
 function descendCaveLayer() {
   const chapter = activeStoryChapter();
   if (caveGame?.hasActiveBoss()) {
-    const message = "区域 Boss 仍在矿洞中，先击败它才能继续下潜。";
+    const message = "无法进入下一层：区域 Boss 仍在矿洞中，先击败它才能继续下潜。";
     showToast(message);
+    logEvent(message);
     playTone("error");
     return { advanced: false, message };
   }
 
   if (chapter && state.depth >= chapter.maxDepth) {
-    const message = `已抵达${chapter.zone}最深处 ${chapter.maxDepth}m。修复${chapter.building.name}并击败${chapter.boss.name}，才能继续下潜。`;
+    const message = `无法进入下一层：已抵达${chapter.zone}最深处 ${chapter.maxDepth}m。修复${chapter.building.name}并击败${chapter.boss.name}，才能继续下潜。`;
     showToast(message);
+    logEvent(message);
     playTone("error");
     return { advanced: false, message };
   }
@@ -2019,8 +2021,9 @@ function descendCaveLayer() {
   const targetDepth = state.depth + 1;
   const accessIssue = depthAccessIssue(targetDepth);
   if (accessIssue) {
-    const message = `${targetDepth}m 的矿层过于危险：${accessIssue}。`;
+    const message = `无法进入下一层：${targetDepth}m 的矿层过于危险，${accessIssue}。`;
     showToast(message);
+    logEvent(message);
     playTone("error");
     return { advanced: false, message };
   }

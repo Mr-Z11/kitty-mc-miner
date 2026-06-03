@@ -50,6 +50,8 @@
       this.running = true;
       this.lastTimestamp = 0;
       this.statusTick = 0;
+      this.priorityHint = "";
+      this.priorityHintUntil = 0;
       this.player = {
         x: 96,
         y: FLOOR_ROW * TILE - PLAYER_HEIGHT,
@@ -536,7 +538,7 @@
 
     handleBottomFall() {
       if (!this.isAtDescentExit()) {
-        this.returnToLastSafePosition("小猫踩空了，已回到最近的安全落脚点。继续向右走到矿洞尽头才会下潜。");
+        this.returnToLastSafePosition("这里不是下潜口：小猫已回到最近的安全落脚点。继续向右走到矿洞尽头，才能进入下一层。");
         return;
       }
 
@@ -548,7 +550,8 @@
         return;
       }
 
-      this.returnToLastSafePosition(result.message || "矿井底部暂时无法继续下潜，小猫退回了安全落脚点。");
+      this.addFloatingText(this.player.x - 8, this.player.y - 8, "无法下潜", "#ffd568");
+      this.returnToLastSafePosition(result.message || "无法进入下一层：矿井底部暂时无法继续下潜，小猫退回了安全落脚点。");
     }
 
     isAtDescentExit() {
@@ -570,7 +573,7 @@
       this.player.invulnerableUntil = performance.now() + 650;
       this.cameraX = clamp(this.player.x - this.viewWidth * 0.42, 0, WORLD_COLUMNS * TILE - this.viewWidth);
       this.cameraY = 0;
-      this.setHint(message);
+      this.setPriorityHint(message);
       this.notifyStatus();
     }
 
@@ -624,6 +627,12 @@
       if (this.options.onHint) this.options.onHint(message);
     }
 
+    setPriorityHint(message, duration = 4200) {
+      this.priorityHint = message;
+      this.priorityHintUntil = performance.now() + duration;
+      this.setHint(message);
+    }
+
     notifyStatus() {
       const config = this.getConfig();
       const nearestEnemy = this.nearestEnemy();
@@ -635,6 +644,7 @@
       if (this.isAtDescentExit()) hint = "矿洞尽头有下潜口。准备好后从这里向下挖，进入下一层。";
       if ((config.durability ?? 1) <= 0) hint = `镐子耐久耗尽，点击矿洞下方“金币修理”，支付 ${config.repairCost || 0} 金币补满耐久。`;
       if (nearestEnemy) hint = `${nearestEnemy.name}靠近了！按 F 使用${config.swordName || "剑"}。`;
+      if (this.priorityHint && performance.now() < this.priorityHintUntil) hint = this.priorityHint;
       this.canvas.dataset.playerX = String(Math.round(this.player.x));
       this.canvas.dataset.playerY = String(Math.round(this.player.y));
       this.canvas.dataset.jumpsUsed = String(this.player.jumpsUsed);
