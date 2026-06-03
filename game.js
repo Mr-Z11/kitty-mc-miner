@@ -165,6 +165,8 @@ const STAMINA_RESTORE_AMOUNT = 2;
 const HEALTH_KIT_RESTORE = 2;
 const HEALTH_REVIVE_AMOUNT = 3;
 const HEALTH_KIT_RECIPE = { wood: 4, coal: 3 };
+const HEALTH_DEATH_RESET_MESSAGE = "血量归零，背包资源已清空，剑与护甲等级已重置。";
+const HEALTH_DEATH_PRESERVE_MESSAGE = "已到达深度、矿洞等级、镐子升级、矿灯、背包等级和矿工等级都会保留。";
 
 const ABYSS_CONTRACT_MATERIALS = ["iron", "gold", "diamond"];
 
@@ -2371,28 +2373,16 @@ function upgradeBeaconResonance() {
   saveGame();
 }
 
-function resetEquipmentAfterHealthDeath(reason = "血量归零，装备已重置，矿工等级保留。") {
-  state.depth = 1;
-  state.toolIndex = 0;
-  state.durabilityLevel = 0;
-  state.pickaxeDurability = null;
-  state.shiftsStarted = 0;
-  state.backpackIndex = 0;
+function resetEquipmentAfterHealthDeath(reason = HEALTH_DEATH_RESET_MESSAGE) {
+  state.inventory = defaultInventory();
   state.swordIndex = 0;
   state.equipment = defaultEquipment();
-  state.lanternLevel = 0;
-  state.perks = defaultPerks();
-  state.stamina = maxStamina();
-  normalizeDurabilityLevel();
-  normalizeLanternLevel();
-  normalizePickaxeDurability();
-  normalizeStamina();
   if (caveGame) {
     caveGame.generateWorld();
     caveGame.resetPosition(true);
   }
   showToast(reason);
-  logEvent("战斗失败后，小猫保留矿工等级、金币、材料与村庄进度，但失去了工具、背包、剑、护甲、矿灯和附魔。");
+  logEvent("战斗失败后，小猫保留已到达深度、矿洞等级、镐子升级、矿灯、背包等级、金币和村庄进度；背包资源清空，剑与护甲等级归零。");
   playTone("error");
   renderAll();
   saveGame();
@@ -2402,7 +2392,7 @@ function handleCaveDeath({ maxHp = 5 } = {}) {
   const missing = missingRequirementLabel(HEALTH_KIT_RECIPE);
   const canHeal = !missing;
   const wantsHeal = canHeal && window.confirm(
-    `血量归零！消耗 ${formatRequirement(HEALTH_KIT_RECIPE)} 立即回血并退回安全点？\n选择“取消”将重置装备，但矿工等级不变。`
+    `血量归零！消耗 ${formatRequirement(HEALTH_KIT_RECIPE)} 立即回血并退回安全点？\n选择“取消”将清空背包资源并重置剑与护甲。${HEALTH_DEATH_PRESERVE_MESSAGE}`
   );
 
   if (wantsHeal) {
@@ -2420,15 +2410,15 @@ function handleCaveDeath({ maxHp = 5 } = {}) {
   }
 
   if (!canHeal) {
-    window.alert(`血量归零，回血需要 ${formatRequirement(HEALTH_KIT_RECIPE)}；当前还缺 ${missing}。将重置装备，但矿工等级不变。`);
+    window.alert(`血量归零，回血需要 ${formatRequirement(HEALTH_KIT_RECIPE)}；当前还缺 ${missing}。将清空背包资源并重置剑与护甲。${HEALTH_DEATH_PRESERVE_MESSAGE}`);
   } else {
-    window.alert("你选择不使用材料回血，将重置装备；矿工等级不变。");
+    window.alert(`你选择不使用材料回血，将清空背包资源并重置剑与护甲。${HEALTH_DEATH_PRESERVE_MESSAGE}`);
   }
 
   resetEquipmentAfterHealthDeath();
   return {
     reset: true,
-    message: "血量归零，装备已重置，矿工等级保留。",
+    message: HEALTH_DEATH_RESET_MESSAGE,
   };
 }
 

@@ -520,7 +520,7 @@
     handlePlayerDeath() {
       const result = this.options.onPlayerDeath
         ? this.options.onPlayerDeath({ hp: this.player.hp, maxHp: this.player.maxHp })
-        : { reset: true, message: "血量归零，装备已重置。" };
+        : { reset: true, message: "血量归零，背包资源已清空，剑与护甲等级已重置。" };
 
       if (result?.revived) {
         this.player.hp = Math.max(1, Math.min(this.player.maxHp, result.hp || this.player.maxHp));
@@ -529,7 +529,7 @@
       }
 
       if (result?.reset) {
-        this.setHint(result.message || "血量归零，装备已重置。");
+        this.setHint(result.message || "血量归零，背包资源已清空，剑与护甲等级已重置。");
         return;
       }
 
