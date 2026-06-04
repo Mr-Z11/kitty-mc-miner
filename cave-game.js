@@ -212,18 +212,39 @@
       document.addEventListener("keyup", (event) => {
         this.keys.delete(event.key.toLowerCase());
       });
+      window.addEventListener("blur", () => this.keys.clear());
 
       document.querySelectorAll("[data-cave-control]").forEach((button) => {
         const control = button.dataset.caveControl;
-        if (["left", "right"].includes(control)) {
-          const key = control === "left" ? "a" : "d";
-          button.addEventListener("pointerdown", () => {
-            if (!this.isLocked()) this.keys.add(key);
-          });
-          button.addEventListener("pointerup", () => this.keys.delete(key));
-          button.addEventListener("pointerleave", () => this.keys.delete(key));
-          button.addEventListener("click", () => {
+        if (["left", "right", "up", "down"].includes(control)) {
+          const keyMap = { left: "a", right: "d", up: "arrowup", down: "arrowdown" };
+          const key = keyMap[control];
+          const release = () => this.keys.delete(key);
+          button.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
             if (this.isLocked()) return;
+            button.setPointerCapture?.(event.pointerId);
+            this.keys.add(key);
+            if (["up", "down"].includes(control)) {
+              this.player.mineDirection = control;
+              this.notifyStatus();
+            }
+          });
+          button.addEventListener("pointerup", (event) => {
+            event.preventDefault();
+            release();
+          });
+          button.addEventListener("pointercancel", release);
+          button.addEventListener("pointerleave", release);
+          button.addEventListener("lostpointercapture", release);
+          button.addEventListener("click", (event) => {
+            event.preventDefault();
+            if (this.isLocked()) return;
+            if (["up", "down"].includes(control)) {
+              this.player.mineDirection = control;
+              this.notifyStatus();
+              return;
+            }
             this.player.facing = control === "left" ? -1 : 1;
             this.movePlayer("x", control === "left" ? -18 : 18);
             this.notifyStatus();
@@ -231,7 +252,8 @@
           return;
         }
 
-        button.addEventListener("click", () => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
           if (this.isLocked()) return;
           if (control === "jump") this.jump();
           if (control === "mine") this.mine();

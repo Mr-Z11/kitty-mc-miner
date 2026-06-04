@@ -2,15 +2,15 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
       content="小猫挖矿 MC 版：挖方块、卖矿石、升级镐子和背包。"
     />
     <title>小猫挖矿 MC 版</title>
-    <link rel="stylesheet" href="./styles.css?v=18" />
+    <link rel="stylesheet" href="./styles.css?v=19" />
     <script defer src="./game-data.js?v=8"></script>
-    <script defer src="./cave-game.js?v=21"></script>
+    <script defer src="./cave-game.js?v=22"></script>
     <script defer src="./game.js?v=21"></script>
   </head>
   <body>
@@ -270,19 +270,25 @@
               <span><i id="bossMeter"></i></span>
             </div>
 
-            <div class="cave-hint" id="caveHint">方向键移动，按 E 挖矿；按住方向再按 E 可定向挖掘</div>
+            <div class="cave-hint" id="caveHint">方向键移动，按 E 挖矿；平板可按住方向再点挖矿定向挖掘</div>
             <div class="cave-hotbar">
               <span><kbd>←</kbd><kbd>→</kbd><kbd>A</kbd><kbd>D</kbd> 移动</span>
               <span><kbd>↑</kbd><kbd>W</kbd><kbd>空格</kbd> 连跳 ×2</span>
               <span><kbd>E</kbd> 挖矿</span>
               <span><kbd>F</kbd> 挥剑</span>
             </div>
-            <div class="mobile-controls" aria-label="矿洞触控操作">
-              <button type="button" data-cave-control="left">←</button>
-              <button type="button" data-cave-control="right">→</button>
-              <button type="button" data-cave-control="jump">↑</button>
-              <button type="button" data-cave-control="mine">⛏</button>
-              <button type="button" data-cave-control="attack">⚔</button>
+            <div class="mobile-controls tablet-controls" aria-label="矿洞触控操作">
+              <div class="touch-cluster movement-cluster" aria-label="移动与定向挖掘">
+                <button class="touch-button touch-left" type="button" data-cave-control="left" aria-label="向左移动">←</button>
+                <button class="touch-button touch-up" type="button" data-cave-control="up" aria-label="向上定向">↑</button>
+                <button class="touch-button touch-down" type="button" data-cave-control="down" aria-label="向下定向">↓</button>
+                <button class="touch-button touch-right" type="button" data-cave-control="right" aria-label="向右移动">→</button>
+              </div>
+              <div class="touch-cluster action-cluster" aria-label="动作">
+                <button class="touch-button jump-button" type="button" data-cave-control="jump" aria-label="跳跃">跳</button>
+                <button class="touch-button mine-button" type="button" data-cave-control="mine" aria-label="挖矿">⛏</button>
+                <button class="touch-button attack-button" type="button" data-cave-control="attack" aria-label="攻击">⚔</button>
+              </div>
             </div>
           </div>
 

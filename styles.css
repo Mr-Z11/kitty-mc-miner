@@ -29,6 +29,7 @@ body {
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
   color: var(--cream);
   font-family: "Courier New", "Microsoft YaHei", monospace;
   background:
@@ -1203,6 +1204,7 @@ h3 {
   width: 100%;
   height: 100%;
   outline: none;
+  touch-action: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
@@ -1331,31 +1333,89 @@ h3 {
 
 .mobile-controls {
   position: absolute;
-  right: 11px;
-  bottom: 42px;
+  right: 12px;
+  bottom: 48px;
+  left: 12px;
   z-index: 7;
   display: none;
-  gap: 5px;
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
-.mobile-controls button {
+.touch-cluster {
   display: grid;
-  width: 34px;
-  height: 34px;
+  gap: 7px;
+  pointer-events: auto;
+}
+
+.movement-cluster {
+  grid-template-columns: repeat(3, 46px);
+  grid-template-rows: repeat(2, 46px);
+  grid-template-areas:
+    ". up ."
+    "left down right";
+}
+
+.action-cluster {
+  grid-template-columns: repeat(2, 52px);
+  grid-template-rows: repeat(2, 52px);
+  grid-template-areas:
+    "jump mine"
+    "attack attack";
+}
+
+.touch-button {
+  display: grid;
+  width: 46px;
+  height: 46px;
   place-items: center;
+  touch-action: none;
   cursor: pointer;
   color: #fff2cb;
   font-size: 14px;
   font-weight: 900;
   border: 2px solid #111d19;
-  background: rgba(60, 84, 74, 0.88);
-  box-shadow: 2px 2px #0a120f;
+  border-radius: 2px;
+  background: rgba(35, 57, 49, 0.88);
+  box-shadow: 3px 3px #0a120f;
+  backdrop-filter: blur(3px);
 }
 
-.mobile-controls button:active {
+.touch-button:active {
   color: var(--lime);
-  transform: translate(2px, 2px);
+  transform: translate(3px, 3px);
   box-shadow: none;
+}
+
+.touch-left { grid-area: left; }
+.touch-right { grid-area: right; }
+.touch-up { grid-area: up; }
+.touch-down { grid-area: down; }
+.jump-button { grid-area: jump; }
+.mine-button { grid-area: mine; }
+.attack-button { grid-area: attack; width: 111px; }
+
+.jump-button,
+.mine-button,
+.attack-button {
+  width: 52px;
+  height: 52px;
+  color: #1d261d;
+  font-size: 15px;
+  background: #eec464;
+  box-shadow: 3px 3px #0a120f, inset -4px -4px 0 rgba(96, 61, 22, 0.3);
+}
+
+.attack-button {
+  width: 111px;
+  color: #ffe8d6;
+  background: #b95649;
+  box-shadow: 3px 3px #0a120f, inset -4px -4px 0 rgba(71, 24, 19, 0.36);
 }
 
 .scene-shine {
@@ -3354,6 +3414,118 @@ kbd {
   }
 }
 
+@media (pointer: coarse), (hover: none) {
+  button,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  .game-shell {
+    width: min(100% - 20px, 1180px);
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .mine-scene {
+    height: clamp(500px, 62vh, 680px);
+    min-height: 500px;
+  }
+
+  .cave-hotbar {
+    display: none;
+  }
+
+  .mobile-controls {
+    display: flex;
+  }
+
+  .cave-hint {
+    top: auto;
+    right: 14px;
+    bottom: 130px;
+    max-width: 250px;
+    text-align: right;
+  }
+
+  .mine-footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .mine-action-trigger,
+  .repair-trigger,
+  .adventure-trigger,
+  .buy-button,
+  .secondary-button {
+    min-height: 42px;
+  }
+}
+
+@media (min-width: 611px) and (max-width: 1180px) and (pointer: coarse), (min-width: 611px) and (max-width: 1180px) and (hover: none) {
+  .topbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .top-stats {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: stretch;
+    margin-top: 11px;
+  }
+
+  .game-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .mine-panel {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .panel {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .mine-scene {
+    height: min(68vh, 650px);
+    min-height: 520px;
+  }
+
+  .movement-cluster {
+    grid-template-columns: repeat(3, 58px);
+    grid-template-rows: repeat(2, 58px);
+  }
+
+  .touch-button {
+    width: 58px;
+    height: 58px;
+    font-size: 18px;
+  }
+
+  .action-cluster {
+    grid-template-columns: repeat(2, 66px);
+    grid-template-rows: repeat(2, 66px);
+  }
+
+  .jump-button,
+  .mine-button,
+  .attack-button {
+    width: 66px;
+    height: 66px;
+    font-size: 18px;
+  }
+
+  .attack-button {
+    width: 139px;
+  }
+
+  .cave-hud {
+    min-width: 168px;
+  }
+}
+
 .cave-shop-modal {
   position: fixed;
   inset: 0;
@@ -3882,6 +4054,36 @@ kbd {
 
   .mobile-controls {
     display: flex;
+  }
+
+  .movement-cluster {
+    grid-template-columns: repeat(3, 38px);
+    grid-template-rows: repeat(2, 38px);
+    gap: 5px;
+  }
+
+  .touch-button {
+    width: 38px;
+    height: 38px;
+    font-size: 13px;
+  }
+
+  .action-cluster {
+    grid-template-columns: repeat(2, 44px);
+    grid-template-rows: repeat(2, 44px);
+    gap: 5px;
+  }
+
+  .jump-button,
+  .mine-button,
+  .attack-button {
+    width: 44px;
+    height: 44px;
+    font-size: 13px;
+  }
+
+  .attack-button {
+    width: 93px;
   }
 
   .cave-hud {
